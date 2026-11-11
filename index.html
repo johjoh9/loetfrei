@@ -13,7 +13,7 @@
   <span class="sp"></span>
   <div class="tb">
     <button type="button" class="btn" id="undoBtn">Rückgängig <kbd>Strg Z</kbd></button>
-    <button type="button" class="btn" id="resetBtn">Lektion zurücksetzen</button>
+    <button type="button" class="btn" id="resetBtn"><span class="long">Lektion zurücksetzen</span><span class="short">Zurücksetzen</span></button>
     <button type="button" class="btn" id="muteBtn" aria-pressed="true"><span>Ton an</span></button>
   </div>
 </header>
@@ -30,18 +30,20 @@
           <radialGradient id="glow-gruen"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".25" stop-color="#3ee06a" stop-opacity=".85"/><stop offset="1" stop-color="#3ee06a" stop-opacity="0"/></radialGradient>
           <radialGradient id="glow-blau"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".25" stop-color="#4a8dff" stop-opacity=".85"/><stop offset="1" stop-color="#4a8dff" stop-opacity="0"/></radialGradient>
         </defs>
-        <rect width="1000" height="620" rx="10" style="fill:var(--mat)"/><rect width="1000" height="620" fill="url(#grid)"/><rect width="1000" height="620" fill="url(#grid5)"/>
+        <rect class="matr" width="1000" height="620" rx="10" style="fill:var(--mat)"/><rect class="matr" width="1000" height="620" fill="url(#grid)"/><rect class="matr" width="1000" height="620" fill="url(#grid5)"/>
         <g id="gComps"></g><g id="gWires"></g>
         <path id="ghostWire" style="display:none"/><circle id="termHi" r="11" style="display:none"/>
         <g id="gFx"></g>
       </svg>
       <div id="status">Simulation läuft</div>
+      <button type="button" id="goalChip" hidden></button>
+      <div class="zoom"><button type="button" id="zIn" aria-label="Vergrößern">+</button><button type="button" id="zOut" aria-label="Verkleinern">−</button><button type="button" id="zFit" aria-label="Ganze Werkbank zeigen"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button></div>
       <div id="toast" role="status"></div>
     </div>
     <div class="traywrap"><h2>Baukasten</h2><div id="tray"></div><span id="trayEmpty" class="muted" hidden>Für diese Lektion liegt alles auf der Werkbank.</span></div>
   </div>
   <aside>
-    <section>
+    <section id="lesson">
       <h1 id="lTitle"></h1><div id="lText"></div>
       <div id="goalSec"><ul id="goals"></ul></div>
       <div id="hints"></div>

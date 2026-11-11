@@ -114,17 +114,49 @@ const DRAW = {
 function drawComp(c) {
   const b = BOX[c.type];
   let s = `<rect class="selbox" x="${b[0] - 6}" y="${b[1] - 6}" width="${b[2] - b[0] + 12}" height="${b[3] - b[1] + 12}" rx="8"/><g class="body">` + DRAW[c.type](c) + '</g>';
-  TERMS[c.type].forEach(t => { s += `<circle class="term${t[2] === '+' || t[2] === '3V3' ? ' tp' : t[2] === '−' || t[2] === 'GND' ? ' tm' : ''}" cx="${t[0]}" cy="${t[1]}" r="5.5"/>`; });
+  TERMS[c.type].forEach(t => { s += `<circle class="term${t[2] === '+' || t[2] === '3V3' ? ' tp' : t[2] === '−' || t[2] === 'GND' ? ' tm' : ''}" cx="${t[0]}" cy="${t[1]}" r="${COARSE ? 7.5 : 5.5}"/>`; });
   return s;
 }
 
 /* ---------- Zustand ---------- */
 const S = { comps: [], wires: [], t: 0, topo: true };
-let VH = 620;
-function fit() { const r = svg.parentNode.getBoundingClientRect(); if (!r.width) return; VH = Math.max(620, Math.min(900, Math.floor(1000 * r.height / r.width / 20) * 20)); svg.setAttribute('viewBox', '0 0 1000 ' + VH); document.querySelectorAll('.matr').forEach(m => m.setAttribute('height', VH)); }
+let VH = 620, UPP = 1, lastW = 0;
+const view = { x: 0, y: 0, w: 1000, h: 620 }, COARSE = matchMedia('(pointer:coarse)').matches;
+const maxW = r => Math.max(1000, VH * r.width / r.height);
+function applyView() {
+  const r = wrap.getBoundingClientRect(); if (!r.width || !r.height) return;
+  view.w = clamp(view.w, 260, maxW(r)); view.h = view.w * r.height / r.width; UPP = view.w / r.width;
+  view.x = view.w >= 1000 ? (1000 - view.w) / 2 : clamp(view.x, 0, 1000 - view.w);
+  view.y = view.h >= VH ? 0 : clamp(view.y, 0, VH - view.h);
+  svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+}
+function resetView() {
+  const r = wrap.getBoundingClientRect(); if (!r.width || !r.height) return;
+  const narrow = r.width < 640;
+  view.w = 1e9;
+  if (narrow && S.comps.length) {
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const c of S.comps) { const b = BOX[c.type]; x0 = Math.min(x0, c.x + b[0]); x1 = Math.max(x1, c.x + b[2]); y0 = Math.min(y0, c.y + b[1]); y1 = Math.max(y1, c.y + b[3]); }
+    const k = r.height / r.width;
+    view.w = Math.max(r.width / 0.68, x1 - x0 + 50, (y1 - y0 + 110) / k);
+    view.x = (x0 + x1) / 2 - view.w / 2; view.y = (y0 + y1) / 2 - view.w * k / 2;
+  }
+  applyView();
+}
+function fit() {
+  const r = wrap.getBoundingClientRect(); if (!r.width || !r.height) return;
+  VH = Math.max(620, Math.min(900, Math.floor(1000 * r.height / r.width / 20) * 20));
+  document.querySelectorAll('.matr').forEach(m => m.setAttribute('height', VH));
+  if (Math.abs(r.width - lastW) > 1) { lastW = r.width; resetView(); } else applyView();
+}
+function zoomAt(f, cx, cy) {
+  const r = wrap.getBoundingClientRect(), fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height, wx = view.x + fx * view.w, wy = view.y + fy * view.h;
+  view.w = clamp(view.w * f, 260, maxW(r)); view.x = wx - fx * view.w; view.y = wy - fy * view.w * r.height / r.width; applyView();
+}
 let nextId = 1, sel = null, level = null, levelIdx = 0, mem = {}, doneHold = 0, completed = false, hintN = 0;
 let undo = [];
 const svg = $('#bench'), gComps = $('#gComps'), gWires = $('#gWires'), gFx = $('#gFx'), ghostWire = $('#ghostWire'), termHi = $('#termHi');
+const wrap = svg.parentNode;
 let store = { done: {}, mute: false, level: 0 };
 try { Object.assign(store, JSON.parse(localStorage.getItem('loetfrei.v1') || '{}')); } catch (e) {}
 const save = () => { try { localStorage.setItem('loetfrei.v1', JSON.stringify(store)); } catch (e) {} };
@@ -252,18 +284,28 @@ function addWire(a, b) {
 
 /* ---------- Zeiger auf der Werkbank ---------- */
 function pt(e) { const m = svg.getScreenCTM().inverse(); const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m); return [p.x, p.y]; }
-function nearTerm(p, r = 13) {
+function nearTerm(p, r = Math.max(13, (COARSE ? 24 : 10) * UPP)) {
   let best = null, bd = r * r;
   for (const c of S.comps) for (let k = 0; k < TERMS[c.type].length; k++) { const q = termPos(c, k), d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2; if (d < bd) { bd = d; best = { c, k, p: q }; } }
   return best;
 }
-let wiring = null, drag = null, knob = null, pressed = null;
+let wiring = null, drag = null, knob = null, pressed = null, pan = null, pinch = null;
+const ptrs = new Map();
+function cancelOps() {
+  if (pressed) { pressed.pressed = false; rerender(pressed); pressed = null; }
+  if (drag) { drag.c.el.classList.remove('dragging'); drag = null; }
+  knob = null; pan = null; endWiring(); showHi(null);
+}
+function pinchState() { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2 }; }
 function showHi(t) { if (t) { termHi.setAttribute('cx', t.p[0]); termHi.setAttribute('cy', t.p[1]); termHi.style.display = ''; } else termHi.style.display = 'none'; }
-function endWiring() { wiring = null; ghostWire.style.display = 'none'; svg.classList.remove('wiring'); }
+function endWiring() { if (wiring) showHi(null); wiring = null; ghostWire.style.display = 'none'; svg.classList.remove('wiring'); }
 svg.addEventListener('pointerdown', e => {
   if (e.button === 2) return;
-  audio(); const p = pt(e), t = nearTerm(p);
+  ptrs.set(e.pointerId, [e.clientX, e.clientY]);
   svg.setPointerCapture(e.pointerId);
+  if (ptrs.size === 2) { cancelOps(); pinch = pinchState(); return; }
+  if (ptrs.size > 2) return;
+  audio(); const p = pt(e), t = nearTerm(p);
   if (t) {
     if (wiring) { if (t.c !== wiring.c || t.k !== wiring.k) addWire([wiring.c.id, wiring.k], [t.c.id, t.k]); endWiring(); return; }
     wiring = { c: t.c, k: t.k, p0: p, moved: false, from: t.p, down: true }; svg.classList.add('wiring');
@@ -280,9 +322,15 @@ svg.addEventListener('pointerdown', e => {
     drag = { c, p0: p, x0: c.x, y0: c.y, moved: false, act };
     return;
   }
-  select(null);
+  select(null); pan = { cx: e.clientX, cy: e.clientY, x: view.x, y: view.y };
 });
 svg.addEventListener('pointermove', e => {
+  if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pinch) {
+    if (ptrs.size < 2) return; const n = pinchState();
+    view.x -= (n.mx - pinch.mx) * UPP; view.y -= (n.my - pinch.my) * UPP; zoomAt(pinch.d / n.d, n.mx, n.my); pinch = n; return;
+  }
+  if (pan) { view.x = pan.x - (e.clientX - pan.cx) * UPP; view.y = pan.y - (e.clientY - pan.cy) * UPP; applyView(); return; }
   const p = pt(e);
   if (wiring) {
     if (Math.hypot(p[0] - wiring.p0[0], p[1] - wiring.p0[1]) > 6) wiring.moved = true;
@@ -301,7 +349,11 @@ svg.addEventListener('pointermove', e => {
   }
   showHi(nearTerm(p));
 });
+svg.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); cancelOps(); if (ptrs.size < 2) pinch = null; });
 svg.addEventListener('pointerup', e => {
+  ptrs.delete(e.pointerId);
+  if (pinch) { if (ptrs.size < 2) pinch = null; return; }
+  pan = null;
   const p = pt(e);
   if (pressed) { pressed.pressed = false; rerender(pressed); pressed = null; snd('release'); }
   if (knob) { knob = null; renderInspector(); }
@@ -309,6 +361,7 @@ svg.addEventListener('pointerup', e => {
     wiring.down = false; const t = nearTerm(p);
     if (t && (t.c !== wiring.c || t.k !== wiring.k)) { addWire([wiring.c.id, wiring.k], [t.c.id, t.k]); endWiring(); showHi(null); }
     else if (wiring.moved && !t) endWiring();
+    else showHi({ p: wiring.from });
   }
   if (drag) {
     const c = drag.c;
@@ -321,8 +374,9 @@ svg.addEventListener('pointerup', e => {
 });
 svg.addEventListener('pointerleave', () => { if (!wiring) showHi(null); });
 svg.addEventListener('wheel', e => {
-  const cg = e.target.closest('[data-comp]'); if (!cg) return; const c = comp(+cg.dataset.comp);
-  if (c.type === 'pot') { e.preventDefault(); c.p.pos = clamp(c.p.pos - Math.sign(e.deltaY) * 0.04, 0, 1); rerender(c); snd('tick'); syncInspector(); }
+  const cg = e.target.closest('[data-comp]'), c = cg && comp(+cg.dataset.comp); e.preventDefault();
+  if (c && c.type === 'pot') { c.p.pos = clamp(c.p.pos - Math.sign(e.deltaY) * 0.04, 0, 1); rerender(c); snd('tick'); syncInspector(); }
+  else zoomAt(Math.exp(clamp(e.deltaY, -80, 80) * 0.002), e.clientX, e.clientY);
 }, { passive: false });
 svg.addEventListener('dblclick', e => { const wg = e.target.closest('[data-wire]'); if (wg) { select({ w: S.wires.find(w => w.id == wg.dataset.wire) }); delSel(); } });
 svg.addEventListener('contextmenu', e => { e.preventDefault(); const g = e.target.closest('[data-wire],[data-comp]'); if (!g) return; select(g.dataset.wire ? { w: S.wires.find(w => w.id == g.dataset.wire) } : { c: comp(+g.dataset.comp) }); delSel(); });
@@ -358,7 +412,7 @@ $('#tray').addEventListener('pointermove', e => {
   if (!tdrag) return;
   if (!tdrag.ghost && Math.hypot(e.clientX - tdrag.x0, e.clientY - tdrag.y0) > 6) {
     const g = document.createElement('div'); g.className = 'dragghost'; g.innerHTML = icon(tdrag.type);
-    const b = BOX[tdrag.type], k = svg.getBoundingClientRect().width / 1000; g.style.width = (b[2] - b[0] + 8) * k + 'px';
+    const b = BOX[tdrag.type], k = 1 / UPP; g.style.width = (b[2] - b[0] + 8) * k + 'px';
     document.body.appendChild(g); tdrag.ghost = g; snd('pick');
   }
   if (tdrag.ghost) { tdrag.ghost.style.left = e.clientX + 'px'; tdrag.ghost.style.top = e.clientY + 'px'; }
@@ -369,10 +423,11 @@ $('#tray').addEventListener('pointerup', e => {
     d.ghost.remove(); const r = svg.getBoundingClientRect();
     if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) { const p = pt(e); addComp(d.type, p[0], p[1]); }
   } else {
-    let x = 500, y = 300; while (S.comps.some(c => Math.abs(c.x - x) < 30 && Math.abs(c.y - y) < 30)) { x += 40; y += 40; }
+    let x = Math.round((view.x + view.w / 2) / 20) * 20, y = Math.round((view.y + view.h / 2) / 20) * 20; while (S.comps.some(c => Math.abs(c.x - x) < 30 && Math.abs(c.y - y) < 30)) { x += 40; y += 40; }
     addComp(d.type, x, y);
   }
 });
+$('#tray').addEventListener('pointercancel', () => { if (tdrag && tdrag.ghost) tdrag.ghost.remove(); tdrag = null; });
 $('#tray').addEventListener('keydown', e => { const b = e.target.closest('.part'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); addComp(b.dataset.type, 500, 300); } });
 
 /* ---------- Inspektor ---------- */
@@ -566,7 +621,7 @@ const LEVELS = [
 function loadLevel(i, keepDone) {
   levelIdx = i; level = LEVELS[i]; store.level = i; save();
   nextId = 1; S.comps = level.build(); S.wires = []; S.topo = true; S.t = 0; undo = []; mem = {}; doneHold = 0; completed = false; hintN = 0; wcI = 0;
-  renderAll(); renderLesson(); renderNav();
+  renderAll(); renderLesson(); renderNav(); resetView();
 }
 function renderNav() {
   let h = '', ch = '';
@@ -583,20 +638,22 @@ function renderLesson() {
   $('#goals').innerHTML = level.goals.map((g, i) => `<li id="g${i}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg><span>${g[0]}</span></li>`).join('');
   $('#goalSec').hidden = !level.goals.length; $('#hints').innerHTML = ''; $('#hintBtn').hidden = !level.hints.length; $('#hintBtn').textContent = 'Tipp zeigen';
   $('#win').hidden = true;
+  const ch = $('#goalChip'); ch.hidden = !level.goals.length; ch.textContent = '0 von ' + level.goals.length + ' Zielen'; ch.classList.remove('ok');
 }
 $('#hintBtn').addEventListener('click', () => { if (hintN < level.hints.length) { const p = document.createElement('p'); p.textContent = level.hints[hintN++]; $('#hints').appendChild(p); snd('tick'); } if (hintN >= level.hints.length) $('#hintBtn').hidden = true; else $('#hintBtn').textContent = 'Noch ein Tipp'; });
 $('#nextBtn').addEventListener('click', () => { snd('toggle'); loadLevel(Math.min(levelIdx + 1, LEVELS.length - 1)); });
 $('#resetBtn').addEventListener('click', () => { snd('del'); loadLevel(levelIdx); toast('Lektion zurückgesetzt.'); });
 $('#undoBtn').addEventListener('click', doUndo);
 const muteBtn = $('#muteBtn'); function syncMute() { muteBtn.setAttribute('aria-pressed', !store.mute); muteBtn.querySelector('span').textContent = store.mute ? 'Ton aus' : 'Ton an'; }
-muteBtn.addEventListener('click', () => { store.mute = !store.mute; save(); syncMute(); fit(); new ResizeObserver(fit).observe(svg.parentNode); snd('goal'); });
+muteBtn.addEventListener('click', () => { store.mute = !store.mute; save(); syncMute(); snd('goal'); });
 
 function checkGoals(dt) {
   if (!level.goals.length || completed) return;
-  let all = true;
-  level.goals.forEach((g, i) => { const ok = !!g[1](dt), el = $('#g' + i); if (ok && !el.classList.contains('ok')) snd('goal'); el.classList.toggle('ok', ok); if (!ok) all = false; });
+  let all = true, n = 0;
+  level.goals.forEach((g, i) => { const ok = !!g[1](dt), el = $('#g' + i); if (ok && !el.classList.contains('ok')) snd('goal'); el.classList.toggle('ok', ok); if (ok) n++; else all = false; });
+  $('#goalChip').textContent = n + ' von ' + level.goals.length + ' Zielen';
   doneHold = all ? doneHold + dt : 0;
-  if (doneHold > 0.6) { completed = true; store.done[level.id] = true; save(); renderNav(); $('#win').hidden = false; $('#nextBtn').textContent = levelIdx + 1 < LEVELS.length - 1 ? 'Nächste Lektion' : 'Ins freie Labor'; snd('win'); $('#win').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  if (doneHold > 0.6) { completed = true; store.done[level.id] = true; save(); renderNav(); $('#win').hidden = false; $('#goalChip').textContent = 'Geschafft'; $('#goalChip').classList.add('ok'); $('#nextBtn').textContent = levelIdx + 1 < LEVELS.length - 1 ? 'Nächste Lektion' : 'Ins freie Labor'; snd('win'); $('#win').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
 }
 
 /* ---------- Bildschleife ---------- */
@@ -645,6 +702,9 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-syncMute(); fit(); new ResizeObserver(fit).observe(svg.parentNode);
+$('#goalChip').addEventListener('click', () => $('#lesson').scrollIntoView({ behavior: 'smooth' }));
+const zc = f => { const r = wrap.getBoundingClientRect(); zoomAt(f, r.left + r.width / 2, r.top + r.height / 2); snd('tick'); };
+$('#zIn').addEventListener('click', () => zc(0.75)); $('#zOut').addEventListener('click', () => zc(1 / 0.75)); $('#zFit').addEventListener('click', () => { view.w = 1e9; applyView(); snd('tick'); });
+syncMute(); fit(); new ResizeObserver(fit).observe(wrap);
 loadLevel(clamp(store.level | 0, 0, LEVELS.length - 1));
 requestAnimationFrame(frame);
