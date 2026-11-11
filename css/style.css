@@ -137,7 +137,11 @@ input[type=number],select{background:var(--panel-2);border:1px solid var(--line)
 @keyframes fade{to{opacity:0}}
 .fx-smoke{fill:rgba(205,210,214,.55);opacity:0;transform-box:fill-box;transform-origin:center;animation:smoke 1.6s ease-out forwards}
 @keyframes smoke{15%{opacity:.7}to{opacity:0;transform:translateY(-70px) scale(2.4)}}
-.short{display:none}
+.btn svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tb{align-items:center}
+.lang{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.lang button{border:0;background:var(--panel-2);padding:5px 9px;font:600 13px var(--f-body);cursor:pointer;color:var(--ink-2)}
+.lang button[aria-pressed=true]{background:var(--ink);color:var(--panel)}
 .zoom{position:absolute;right:10px;top:10px;display:grid;gap:4px}
 .zoom button{width:34px;height:34px;border-radius:8px;border:0;background:rgba(10,25,33,.72);color:#eaf1f4;font:600 19px/1 var(--f-body);cursor:pointer;display:grid;place-items:center}
 .zoom button:active{transform:scale(.92)}
@@ -151,9 +155,9 @@ input[type=number],select{background:var(--panel-2);border:1px solid var(--line)
   header{padding:8px 12px;gap:8px;flex-wrap:wrap}
   .brand{font-size:18px;gap:8px}
   .tb{flex-wrap:nowrap;gap:5px}
-  .tb .btn{font-size:13px;padding:6px 7px}
-  header>.muted,.tb kbd,.long{display:none}
-  .short{display:inline}
+  .tb .btn{padding:8px 9px}
+  .lang button{padding:8px 9px}
+  header>.muted,.tb kbd,.tb .btn span{display:none}
   .btn{padding:7px 10px}
   main{display:flex;flex-direction:column}
   nav{order:0;border-right:0;border-bottom:1px solid var(--line);flex-direction:row;overflow-x:auto;padding:8px 12px;align-items:center}

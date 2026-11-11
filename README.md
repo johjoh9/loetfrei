@@ -4,6 +4,8 @@ Ein Elektronik-Labor im Browser: Schaltungen mit Maus oder Finger zusammenstecke
 
 **Direkt ausprobieren: [johjoh9.github.io/loetfrei](https://johjoh9.github.io/loetfrei/)**
 
+*English: Lötfrei is an electronics lab in the browser for learning circuit basics and the ESP32 without buying hardware. The app is available in German and English; switch with the DE/EN control in the top bar.*
+
 ## Warum es das gibt
 
 Die Idee war, Elektronik und den ESP32 lernen zu können, ohne erst ein Dev-Kit, ein Steckbrett und eine Tüte Bauteile kaufen zu müssen. Und auch dann üben zu können, wenn man unterwegs ist und die Hardware zu Hause liegt.
@@ -17,6 +19,8 @@ Lötfrei ersetzt dafür die Werkbank: Netzteil, Widerstände, LEDs und ein ESP32
 - **Fehler machen:** Zu viel Strom zerstört LEDs und Widerstände, ein offener Eingang am ESP32 liefert zufällige Werte, ein Kurzschluss schickt das Netzteil in die Strombegrenzung.
 - **Den ESP32 kennenlernen:** Drei Sketche (Blink, Taster einlesen, LED per Poti dimmen), bei denen sich Pins und Werte direkt im Code ändern lassen.
 - **Schritt für Schritt lernen:** Zehn Lektionen vom ersten Stromkreis über das ohmsche Gesetz bis zu ADC und PWM, mit Zielen, die live abgehakt werden. Danach wartet ein freies Labor ohne Aufgabe.
+
+Die Oberfläche gibt es auf Deutsch und Englisch, umschaltbar oben rechts. Beim ersten Besuch richtet sie sich nach der Browsersprache.
 
 Die App läuft auch auf dem Smartphone: Mit zwei Fingern zoomen, mit einem Finger die Werkbank verschieben, Kabel durch Antippen zweier Anschlüsse ziehen.
 
