@@ -289,10 +289,20 @@ function addWire(a, b) {
 
 /* ---------- Zeiger auf der Werkbank ---------- */
 function pt(e) { const m = svg.getScreenCTM().inverse(); const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m); return [p.x, p.y]; }
-function nearTerm(p, r = Math.max(13, (COARSE ? 24 : 10) * UPP)) {
+/* strict (Finger): ein Anschluss zählt nur, wenn der Finger ihm näher ist als der Bauteilmitte */
+function nearTerm(p, strict) {
+  const r = Math.max(13, (COARSE ? 24 : 10) * UPP);
   let best = null, bd = r * r;
-  for (const c of S.comps) for (let k = 0; k < TERMS[c.type].length; k++) { const q = termPos(c, k), d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2; if (d < bd) { bd = d; best = { c, k, p: q }; } }
+  for (const c of S.comps) {
+    const dc = (c.x - p[0]) ** 2 + (c.y - p[1]) ** 2;
+    for (let k = 0; k < TERMS[c.type].length; k++) { const q = termPos(c, k), d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2; if (d < bd && !(strict && dc < d)) { bd = d; best = { c, k, p: q }; } }
+  }
   return best;
+}
+function beginWire(t, p, down) {
+  wiring = { c: t.c, k: t.k, p0: p, moved: false, from: t.p, down }; svg.classList.add('wiring');
+  ghostWire.setAttribute('d', bez(t.p, t.p)); ghostWire.style.display = ''; snd('pick'); ripple(t.p[0], t.p[1], '#fff');
+  if (!down) showHi(t);
 }
 let wiring = null, drag = null, knob = null, pressed = null, pan = null, pinch = null;
 const ptrs = new Map();
@@ -307,14 +317,15 @@ function endWiring() { if (wiring) showHi(null); wiring = null; ghostWire.style.
 svg.addEventListener('pointerdown', e => {
   if (e.button === 2) return;
   ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-  svg.setPointerCapture(e.pointerId);
+  try { svg.setPointerCapture(e.pointerId); } catch (err) {}
   if (ptrs.size === 2) { cancelOps(); pinch = pinchState(); return; }
   if (ptrs.size > 2) return;
-  audio(); const p = pt(e), t = nearTerm(p);
+  audio(); const touch = e.pointerType === 'touch', p = pt(e), t = nearTerm(p, touch && !wiring);
   if (t) {
     if (wiring) { if (t.c !== wiring.c || t.k !== wiring.k) addWire([wiring.c.id, wiring.k], [t.c.id, t.k]); endWiring(); return; }
-    wiring = { c: t.c, k: t.k, p0: p, moved: false, from: t.p, down: true }; svg.classList.add('wiring');
-    ghostWire.setAttribute('d', bez(t.p, t.p)); ghostWire.style.display = ''; snd('pick'); ripple(t.p[0], t.p[1], '#fff'); return;
+    /* Finger: Ziehen verschiebt das Bauteil, erst ein Antippen des Anschlusses beginnt ein Kabel */
+    if (touch) { drag = { c: t.c, p0: p, x0: t.c.x, y0: t.c.y, moved: false, term: t, slop: 9 * UPP }; return; }
+    beginWire(t, p, true); return;
   }
   if (wiring) { endWiring(); return; }
   const wg = e.target.closest('[data-wire]'), cg = e.target.closest('[data-comp]');
@@ -324,7 +335,7 @@ svg.addEventListener('pointerdown', e => {
     if (!sel || sel.c !== c) select({ c });
     if (act === 'press') { c.pressed = true; pressed = c; rerender(c); snd('press'); return; }
     if (act === 'knob') { pushUndo(); knob = { c, p0: p, pos0: c.p.pos }; return; }
-    drag = { c, p0: p, x0: c.x, y0: c.y, moved: false, act };
+    drag = { c, p0: p, x0: c.x, y0: c.y, moved: false, act, slop: touch ? 9 * UPP : 5 };
     return;
   }
   select(null); pan = { cx: e.clientX, cy: e.clientY, x: view.x, y: view.y };
@@ -345,7 +356,7 @@ svg.addEventListener('pointermove', e => {
   if (knob) { const c = knob.c; c.p.pos = clamp(knob.pos0 + ((p[0] - knob.p0[0]) - (p[1] - knob.p0[1])) / 140, 0, 1); rerender(c); syncInspector(); return; }
   if (drag) {
     const c = drag.c, dx = p[0] - drag.p0[0], dy = p[1] - drag.p0[1];
-    if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; pushUndo(); snd('pick'); c.el.classList.add('dragging'); gComps.appendChild(c.el); }
+    if (!drag.moved && Math.hypot(dx, dy) > drag.slop) { drag.moved = true; if (!sel || sel.c !== c) select({ c }); pushUndo(); snd('pick'); c.el.classList.add('dragging'); gComps.appendChild(c.el); }
     if (drag.moved) {
       const b = BOX[c.type], nx = clamp(Math.round((drag.x0 + dx) / 20) * 20, 50, 950), ny = clamp(Math.round((drag.y0 + dy) / 20) * 20, 40, VH - 40);
       if (nx !== c.x || ny !== c.y) { c.x = nx; c.y = ny; setTf(c); S.wires.forEach(w => { if (w.a[0] === c.id || w.b[0] === c.id) updWire(w); }); }
@@ -371,6 +382,7 @@ svg.addEventListener('pointerup', e => {
   if (drag) {
     const c = drag.c;
     if (drag.moved) { c.el.classList.remove('dragging'); snd('place'); }
+    else if (drag.term) beginWire(drag.term, p, false);
     else if (drag.act === 'toggle') { pushUndo(); c.p.closed = !c.p.closed; rerender(c); snd('toggle'); renderInspector(); }
     else if (drag.act === 'power') { pushUndo(); c.p.on = !c.p.on; snd('toggle'); renderInspector(); }
     else if (drag.act === 'mode') { pushUndo(); c.p.mode = c.p.mode === 'V' ? 'A' : 'V'; rerender(c); snd('toggle'); renderInspector(); }
