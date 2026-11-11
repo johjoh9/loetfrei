@@ -162,7 +162,7 @@ let nextId = 1, sel = null, level = null, levelIdx = 0, mem = {}, doneHold = 0, 
 let undo = [];
 const svg = $('#bench'), gComps = $('#gComps'), gWires = $('#gWires'), gFx = $('#gFx'), ghostWire = $('#ghostWire'), termHi = $('#termHi');
 const wrap = svg.parentNode;
-let store = { done: {}, mute: false, level: 0, lang: null };
+let store = { done: {}, mute: false, level: 0, lang: null, fold: false };
 try { Object.assign(store, JSON.parse(localStorage.getItem('loetfrei.v1') || '{}')); } catch (e) {}
 const save = () => { try { localStorage.setItem('loetfrei.v1', JSON.stringify(store)); } catch (e) {} };
 
@@ -203,7 +203,7 @@ function wireD(w) {
 function bez(p, q) { const s = Math.min(90, 22 + Math.hypot(p[0] - q[0], p[1] - q[1]) * 0.18); return `M${p[0]} ${p[1]}C${p[0]} ${p[1] + s} ${q[0]} ${q[1] + s} ${q[0]} ${q[1]}`; }
 function mountWire(w) {
   const g = document.createElementNS(NS, 'g'); g.dataset.wire = w.id; g.setAttribute('class', 'wire'); w.el = g;
-  g.innerHTML = `<path class="w-sh"/><path class="w-body" stroke="${w.col}"/><path class="w-hl"/><path class="w-flow"/>`;
+  g.innerHTML = `<path class="w-hit"/><path class="w-sh"/><path class="w-body" stroke="${w.col}"/><path class="w-hl"/><path class="w-flow"/>`;
   gWires.appendChild(g); updWire(w);
 }
 function updWire(w) { const d = wireD(w); for (const p of w.el.children) p.setAttribute('d', d); }
@@ -216,6 +216,7 @@ function select(s) {
   sel = s;
   S.comps.forEach(c => c.el && c.el.classList.toggle('selected', !!s && s.c === c));
   S.wires.forEach(w => w.el && w.el.classList.toggle('selected', !!s && s.w === w));
+  $('#selBar').hidden = !s; $('#sbRot').hidden = !s || !s.c;
   renderInspector();
 }
 
@@ -673,7 +674,9 @@ function renderLesson() {
   $('#win').hidden = true;
   const ch = $('#goalChip'); ch.hidden = !level.goals.length; ch.textContent = chipTxt(0); ch.classList.remove('ok');
 }
+function setFold(f) { store.fold = !!f; save(); $('#lesson').classList.toggle('folded', store.fold); $('#foldBtn').setAttribute('aria-expanded', !store.fold); }
 function showWin() {
+  if (store.fold) setFold(false);
   $('#win').hidden = false; $('#nextBtn').textContent = levelIdx + 1 < LEVELS.length - 1 ? L('Nächste Lektion', 'Next lesson') : L('Ins freie Labor', 'To the free lab');
   $('#goalChip').textContent = L('Geschafft', 'Done'); $('#goalChip').classList.add('ok');
 }
@@ -684,6 +687,7 @@ const STATIC = {
   undo: ['Rückgängig', 'Undo'], kbdUndo: ['Strg Z', 'Ctrl Z'], reset: ['Lektion zurücksetzen', 'Reset lesson'], tray: ['Baukasten', 'Parts'],
   trayEmpty: ['Für diese Lektion liegt alles auf der Werkbank.', 'Everything for this lesson is already on the bench.'], done: ['Geschafft', 'Done'], sketch: ['Sketch auf dem ESP32', 'Sketch on the ESP32'],
   aNav: ['Lektionen', 'Lessons'], aBench: ['Werkbank', 'Workbench'], aIn: ['Vergrößern', 'Zoom in'], aOut: ['Verkleinern', 'Zoom out'], aFit: ['Ganze Werkbank zeigen', 'Show the whole bench'],
+  rot: ['Drehen', 'Rotate'], del: ['Entfernen', 'Remove'], aFold: ['Aufgabe ein- oder ausklappen', 'Collapse or expand the task'],
   aSk: ['Sketch auswählen', 'Choose sketch'], aSerial: ['Serieller Monitor', 'Serial monitor'], aLang: ['Sprache', 'Language']
 };
 let silent = false;
@@ -765,7 +769,10 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-$('#goalChip').addEventListener('click', () => $('#lesson').scrollIntoView({ behavior: 'smooth' }));
+$('#goalChip').addEventListener('click', () => { setFold(false); $('#lesson').scrollIntoView({ behavior: 'smooth' }); });
+$('#foldBtn').addEventListener('click', () => { setFold(!store.fold); snd('tick'); });
+$('#sbDel').addEventListener('click', delSel); $('#sbRot').addEventListener('click', rotSel);
+setFold(store.fold);
 const zc = f => { const r = wrap.getBoundingClientRect(); zoomAt(f, r.left + r.width / 2, r.top + r.height / 2); snd('tick'); };
 $('#zIn').addEventListener('click', () => zc(0.75)); $('#zOut').addEventListener('click', () => zc(1 / 0.75)); $('#zFit').addEventListener('click', () => { view.w = 1e9; applyView(); snd('tick'); });
 applyLang(); fit(); new ResizeObserver(fit).observe(wrap);
