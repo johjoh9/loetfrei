@@ -216,7 +216,6 @@ function select(s) {
   sel = s;
   S.comps.forEach(c => c.el && c.el.classList.toggle('selected', !!s && s.c === c));
   S.wires.forEach(w => w.el && w.el.classList.toggle('selected', !!s && s.w === w));
-  $('#selBar').hidden = !s; $('#sbRot').hidden = !s || !s.c;
   renderInspector();
 }
 
@@ -266,7 +265,7 @@ function addComp(type, x, y, p) {
   if (type === 'esp' && S.comps.some(c => c.type === 'esp')) { toast(L('Auf der Werkbank liegt schon ein ESP32.', 'There is already an ESP32 on the bench.'), 'bad'); snd('err'); return null; }
   pushUndo();
   const b = BOX[type], c = mk(type, clamp(Math.round(x / 20) * 20, -b[0] + 10, 990 - b[2]), clamp(Math.round(y / 20) * 20, -b[1] + 10, VH - 10 - b[3]), p);
-  S.comps.push(c); S.topo = true; mountComp(c); pop(c); select({ c }); snd('place'); ripple(c.x, c.y); renderTray(); renderCode();
+  S.comps.push(c); S.topo = true; mountComp(c); pop(c); select({ c }); snd('place'); ripple(c.x, c.y); renderTray(); renderCode(); revealSel();
   return c;
 }
 function delSel() {
@@ -389,6 +388,7 @@ svg.addEventListener('pointerup', e => {
     else if (drag.act === 'mode') { pushUndo(); c.p.mode = c.p.mode === 'V' ? 'A' : 'V'; rerender(c); snd('toggle'); renderInspector(); }
     drag = null;
   }
+  revealSel();
 });
 svg.addEventListener('pointerleave', () => { if (!wiring) showHi(null); });
 svg.addEventListener('wheel', e => {
@@ -449,52 +449,77 @@ $('#tray').addEventListener('pointercancel', () => { if (tdrag && tdrag.ghost) t
 $('#tray').addEventListener('keydown', e => { const b = e.target.closest('.part'); if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); addComp(b.dataset.type, 500, 300); } });
 
 /* ---------- Inspektor ---------- */
+const ICO = { rot: 'M13 8a5 5 0 1 1-1.5-3.5M13 2.5v3h-3', del: 'M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M6.8 7v4M9.2 7v4', close: 'M4 4l8 8M12 4l-8 8' };
 function renderInspector() {
-  const el = $('#inspector');
+  const el = $('#inspector'); el.classList.toggle('empty', !sel);
   if (!sel) { el.innerHTML = `<p class="muted">${L('Klick ein Bauteil an, um es einzustellen und zu messen. Kabel ziehst du von Anschluss zu Anschluss.', 'Select a part to adjust and measure it. Draw wires from terminal to terminal.')}</p>`; return; }
-  if (sel.w) { el.innerHTML = `<h3>${L('Kabel', 'Wire')}</h3><p class="muted">${L('Strom im Kabel', 'Current in the wire')}: <b id="ro-i" class="num">–</b></p><div class="row"><button type="button" class="btn" data-do="del">${L('Kabel entfernen', 'Remove wire')}</button></div>`; return; }
+  const ib = (act, label, cls = '') => `<button type="button" class="ib ${cls}" data-do="${act}" aria-label="${label}" title="${label}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${ICO[act]}"/></svg></button>`;
+  const head = (name, rot) => `<div class="ihead"><h3>${name}</h3><div class="iact">${rot ? ib('rot', L('Drehen (R)', 'Rotate (R)')) : ''}${ib('del', L('Entfernen (Entf)', 'Remove (Del)'), 'danger')}${ib('close', L('Schließen', 'Close'), 'x')}</div></div>`;
+  if (sel.w) { el.innerHTML = head(L('Kabel', 'Wire'), false) + `<p>${L('Strom im Kabel', 'Current in the wire')}: <b id="ro-i" class="num">–</b></p>`; return; }
   const c = sel.c, p = c.p, lock = level.lock || {};
-  let h = `<h3>${tr(NAMES[c.type])}</h3><p class="muted">${tr(INFO[c.type])}</p>`;
-  const slider = (id, label, min, max, step, val, out, dis) => `<label class="ctl" for="${id}"><span>${label}</span><output id="${id}-o">${out}</output><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"${dis ? ' disabled' : ''}></label>`;
+  let h = head(tr(NAMES[c.type]), true) + `<p class="muted info">${tr(INFO[c.type])}</p>`;
+  const slider = (id, label, min, max, step, val, out, dis, chips) => `<div class="ctl"><label for="${id}">${label}</label><output id="${id}-o" for="${id}">${out}</output>
+    <div class="stepper"><button type="button" class="stp" data-step="-1" data-for="${id}" aria-label="${L('Weniger', 'Less')}"${dis ? ' disabled' : ''}>−</button><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"${dis ? ' disabled' : ''}><button type="button" class="stp" data-step="1" data-for="${id}" aria-label="${L('Mehr', 'More')}"${dis ? ' disabled' : ''}>+</button></div>
+    ${chips && !dis ? `<div class="chips">${chips.map(([v, t]) => `<button type="button" class="chip" data-set="${id}" data-val="${v}">${t}</button>`).join('')}</div>` : ''}</div>`;
   if (c.type === 'psu') {
-    h += slider('in-v', L('Spannung', 'Voltage') + (lock.v ? L(' (in dieser Lektion fest)', ' (fixed in this lesson)') : ''), 0, 12, 0.1, p.v, fmtV(p.v), lock.v);
-    h += slider('in-il', L('Strombegrenzung', 'Current limit'), 0, ILIMS.length - 1, 1, ILIMS.indexOf(p.ilim), fmtI(p.ilim));
+    h += slider('in-v', L('Spannung', 'Voltage') + (lock.v ? L(' (in dieser Lektion fest)', ' (fixed in this lesson)') : ''), 0, 12, 0.1, p.v, fmtV(p.v), lock.v, [3.3, 5, 9, 12].map(v => [v, de(v, v % 1 ? 1 : 0) + ' V']));
+    h += slider('in-il', L('Strombegrenzung', 'Current limit'), 0, ILIMS.length - 1, 1, ILIMS.indexOf(p.ilim), fmtI(p.ilim), false, [3, 6, 8, 9].map(i => [i, fmtI(ILIMS[i])]));
     h += `<div class="row"><button type="button" class="btn${p.on ? ' on' : ''}" data-do="power" aria-pressed="${p.on}">${p.on ? L('Ausgang ein', 'Output on') : L('Ausgang aus', 'Output off')}</button></div>`;
   } else if (c.type === 'resistor') {
     if (p.burnt) h += `<div class="row"><button type="button" class="btn on" data-do="fix">${L('Neuen Widerstand einsetzen', 'Fit a new resistor')}</button></div>`;
     else {
       let i = 0; E12.forEach((v, k) => { if (Math.abs(v - p.r) < Math.abs(E12[i] - p.r)) i = k; });
-      h += slider('in-r', L('Wert (Normreihe E12)', 'Value (E12 series)'), 0, E12.length - 1, 1, i, fmtR(p.r));
-      h += `<label class="ctl" for="in-rn"><span>${L('Oder frei eingeben, in Ohm', 'Or type any value, in ohms')}</span><input type="number" id="in-rn" min="1" max="1000000" value="${p.r}"></label>`;
+      h += slider('in-r', L('Wert (Normreihe E12)', 'Value (E12 series)'), 0, E12.length - 1, 1, i, fmtR(p.r), false, [100, 220, 330, 470, 1000, 2200, 10000].map(v => [E12.indexOf(v), fmtR(v)]));
+      h += `<div class="ctl"><label for="in-rn">${L('Oder frei eingeben, in Ohm', 'Or type any value, in ohms')}</label><input type="number" inputmode="numeric" id="in-rn" min="1" max="1000000" value="${p.r}"></div>`;
     }
   } else if (c.type === 'led') {
     if (p.burnt) h += `<div class="row"><button type="button" class="btn on" data-do="fix">${L('Neue LED einsetzen', 'Fit a new LED')}</button></div>`;
     h += `<div class="seg-ctl" role="group" aria-label="${L('Farbe', 'Color')}">` + Object.entries(LED_TYPES).map(([k, t]) => `<button type="button" data-col="${k}" aria-pressed="${p.color === k}"><i style="background:${t.c}"></i>${tr(LEDN[k])}</button>`).join('') + `</div><p class="muted">${L('Durchlassspannung ca.', 'Forward voltage approx.')} ${de(LED_TYPES[p.color].vf, 1)} V</p>`;
-  } else if (c.type === 'cap') h += slider('in-c', L('Kapazität', 'Capacitance'), 0, CAPS.length - 1, 1, CAPS.indexOf(p.c), fmtC(p.c));
+  } else if (c.type === 'cap') h += `<div class="ctl"><span>${L('Kapazität', 'Capacitance')}</span></div><div class="seg-ctl" role="group" aria-label="${L('Kapazität', 'Capacitance')}">` + CAPS.map(v => `<button type="button" data-capc="${v}" aria-pressed="${p.c === v}">${fmtC(v)}</button>`).join('') + '</div>';
   else if (c.type === 'pot') {
-    h += slider('in-pos', L('Stellung', 'Position'), 0, 1, 0.01, p.pos, Math.round(p.pos * 100) + ' %');
+    h += slider('in-pos', L('Stellung', 'Position'), 0, 1, 0.01, p.pos, Math.round(p.pos * 100) + ' %', false, [[0, '0 %'], [0.25, '25 %'], [0.5, '50 %'], [0.75, '75 %'], [1, '100 %']]);
     h += `<div class="seg-ctl" role="group" aria-label="${L('Gesamtwiderstand', 'Total resistance')}">` + [1000, 10000, 100000].map(v => `<button type="button" data-potr="${v}" aria-pressed="${p.r === v}">${fmtR(v)}</button>`).join('') + '</div>';
   } else if (c.type === 'meter') h += `<div class="seg-ctl" role="group" aria-label="${L('Messmodus', 'Mode')}"><button type="button" data-mode="V" aria-pressed="${p.mode === 'V'}">${L('Spannung', 'Voltage')}</button><button type="button" data-mode="A" aria-pressed="${p.mode === 'A'}">${L('Strom', 'Current')}</button></div>`;
   else if (c.type === 'sw') h += `<div class="row"><button type="button" class="btn${p.closed ? ' on' : ''}" data-do="toggle" aria-pressed="${p.closed}">${p.closed ? L('Geschlossen', 'Closed') : L('Offen', 'Open')}</button></div>`;
   if (c.type !== 'esp') h += `<dl class="ro"><div><dt>${L('Spannung', 'Voltage')}</dt><dd id="ro-v" class="num">–</dd></div><div><dt>${L('Strom', 'Current')}</dt><dd id="ro-i" class="num">–</dd></div><div><dt>${L('Leistung', 'Power')}</dt><dd id="ro-p" class="num">–</dd></div></dl>`;
-  h += `<div class="row"><button type="button" class="btn" data-do="rot">${L('Drehen', 'Rotate')} <kbd>R</kbd></button><button type="button" class="btn" data-do="del">${L('Entfernen', 'Remove')} <kbd>${L('Entf', 'Del')}</kbd></button></div>`;
   el.innerHTML = h;
+}
+/* Schieberegler um einen Schritt verstellen; gedrückt halten wiederholt */
+function stepCtl(b) {
+  const i = $('#' + b.dataset.for); if (!i || i.disabled) return;
+  const st = +i.step || 1, big = (+i.max - +i.min) / st > 40 && i.id !== 'in-r' ? 1 : 1;
+  const v = clamp(Math.round((+i.value + b.dataset.step * st * big) / st) * st, +i.min, +i.max);
+  if (v === +i.value) return; i.value = v; i.dispatchEvent(new Event('input', { bubbles: true }));
+}
+let stepT = null;
+const stopStep = () => { clearTimeout(stepT); clearInterval(stepT); stepT = null; };
+function revealSel() {
+  if (!sel || !sel.c || !matchMedia('(max-width:980px)').matches) return;
+  const top = $('#inspector').getBoundingClientRect().top, q = new DOMPoint(sel.c.x, sel.c.y + BOX[sel.c.type][3]).matrixTransform(svg.getScreenCTM());
+  if (q.y + 20 > top) { view.y += (q.y + 20 - top) * UPP; applyView(); }
 }
 function syncInspector() { if (sel && sel.c && sel.c.type === 'pot') { const i = $('#in-pos'); if (i) { i.value = sel.c.p.pos; $('#in-pos-o').textContent = Math.round(sel.c.p.pos * 100) + ' %'; } } }
 const insp = $('#inspector');
-insp.addEventListener('pointerdown', () => { if (sel) pushUndo(); }, true);
+insp.addEventListener('pointerdown', e => {
+  if (sel) pushUndo();
+  const b = e.target.closest('.stp'); if (!b) return;
+  e.preventDefault(); stopStep(); stepCtl(b); stepT = setTimeout(() => { stepT = setInterval(() => stepCtl(b), 70); }, 380);
+}, true);
+for (const t of ['pointerup', 'pointercancel', 'pointerleave']) insp.addEventListener(t, stopStep, true);
 insp.addEventListener('input', e => {
   const c = sel && sel.c; if (!c) return; const id = e.target.id, v = +e.target.value, o = $('#' + id + '-o');
   if (id === 'in-v') { c.p.v = v; o.textContent = fmtV(v); }
   else if (id === 'in-il') { c.p.ilim = ILIMS[v]; o.textContent = fmtI(c.p.ilim); }
   else if (id === 'in-r') { c.p.r = E12[v]; o.textContent = fmtR(c.p.r); $('#in-rn').value = c.p.r; rerender(c); }
-  else if (id === 'in-rn') { if (v >= 1 && v <= 1e6) { c.p.r = v; $('#in-r-o').textContent = fmtR(v); rerender(c); } }
-  else if (id === 'in-c') { c.p.c = CAPS[v]; o.textContent = fmtC(c.p.c); rerender(c); }
+  else if (id === 'in-rn') { if (v >= 1 && v <= 1e6) { c.p.r = v; $('#in-r-o').textContent = fmtR(v); let i = 0; E12.forEach((x, k) => { if (Math.abs(x - v) < Math.abs(E12[i] - v)) i = k; }); $('#in-r').value = i; rerender(c); } }
   else if (id === 'in-pos') { c.p.pos = v; o.textContent = Math.round(v * 100) + ' %'; rerender(c); }
   if (e.target.type === 'range') snd('tick');
 });
 insp.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || !sel) return; const c = sel.c, d = b.dataset;
+  if (b.classList.contains('stp')) { if (e.detail === 0) stepCtl(b); return; }
+  if (d.set) { const i = $('#' + d.set); i.value = d.val; i.dispatchEvent(new Event('input', { bubbles: true })); snd('toggle'); return; }
+  if (d.do === 'close') return select(null);
   if (d.do === 'del') return delSel();
   if (d.do === 'rot') return rotSel();
   if (d.do === 'power') c.p.on = !c.p.on;
@@ -502,6 +527,7 @@ insp.addEventListener('click', e => {
   else if (d.do === 'fix') { c.p.burnt = false; c.over = 0; c.vd = 0; snd('place'); pop(c); }
   else if (d.col) { c.p.color = d.col; c.vd = 0; }
   else if (d.potr) c.p.r = +d.potr;
+  else if (d.capc) c.p.c = +d.capc;
   else if (d.mode) c.p.mode = d.mode;
   else return;
   if (!d.do || d.do !== 'fix') snd('toggle');
@@ -687,7 +713,7 @@ const STATIC = {
   undo: ['Rückgängig', 'Undo'], kbdUndo: ['Strg Z', 'Ctrl Z'], reset: ['Lektion zurücksetzen', 'Reset lesson'], tray: ['Baukasten', 'Parts'],
   trayEmpty: ['Für diese Lektion liegt alles auf der Werkbank.', 'Everything for this lesson is already on the bench.'], done: ['Geschafft', 'Done'], sketch: ['Sketch auf dem ESP32', 'Sketch on the ESP32'],
   aNav: ['Lektionen', 'Lessons'], aBench: ['Werkbank', 'Workbench'], aIn: ['Vergrößern', 'Zoom in'], aOut: ['Verkleinern', 'Zoom out'], aFit: ['Ganze Werkbank zeigen', 'Show the whole bench'],
-  rot: ['Drehen', 'Rotate'], del: ['Entfernen', 'Remove'], aFold: ['Aufgabe ein- oder ausklappen', 'Collapse or expand the task'],
+  aFold: ['Aufgabe ein- oder ausklappen', 'Collapse or expand the task'],
   aSk: ['Sketch auswählen', 'Choose sketch'], aSerial: ['Serieller Monitor', 'Serial monitor'], aLang: ['Sprache', 'Language']
 };
 let silent = false;
@@ -771,7 +797,6 @@ function frame(ts) {
 
 $('#goalChip').addEventListener('click', () => { setFold(false); $('#lesson').scrollIntoView({ behavior: 'smooth' }); });
 $('#foldBtn').addEventListener('click', () => { setFold(!store.fold); snd('tick'); });
-$('#sbDel').addEventListener('click', delSel); $('#sbRot').addEventListener('click', rotSel);
 setFold(store.fold);
 const zc = f => { const r = wrap.getBoundingClientRect(); zoomAt(f, r.left + r.width / 2, r.top + r.height / 2); snd('tick'); };
 $('#zIn').addEventListener('click', () => zc(0.75)); $('#zOut').addEventListener('click', () => zc(1 / 0.75)); $('#zFit').addEventListener('click', () => { view.w = 1e9; applyView(); snd('tick'); });
