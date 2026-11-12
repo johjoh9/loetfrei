@@ -29,5 +29,15 @@ console.log('esp LED mA', (S.comps[2].i * 1e3).toFixed(2), 'floating D4', seen.j
 S.wires.push({ a: [5, 0], b: [1, 3] }, { a: [5, 1], b: [1, 1] }); run(S, 100); console.log('pulldown D4', esp.pv[4].toFixed(4));
 S.comps[3].pressed = true; run(S, 50); console.log('pressed D4', esp.pv[4].toFixed(3));
 esp.pins[2] = { mode: 'pwm', duty: 0.25 }; run(S, 500); console.log('pwm 25% avg mA', (S.comps[2].iA * 1e3).toFixed(2));
+// 7: NPN als Schalter: 5 V -> Motor -> C, E -> Minus, Basis über 1k an 3,3 V (zweites Netzteil)
+{
+  const T = { t: 0, topo: true, comps: [mk(1, 'psu', { v: 5, ilim: 0.5, on: true }), mk(2, 'motor', {}), mk(3, 'npn', {}), mk(4, 'resistor', { r: 1000 }), mk(5, 'psu', { v: 3.3, ilim: 0.5, on: true })],
+    wires: [{ a: [1, 0], b: [2, 0] }, { a: [2, 1], b: [3, 0] }, { a: [3, 2], b: [1, 1] }, { a: [5, 0], b: [4, 0] }, { a: [4, 1], b: [3, 1] }, { a: [5, 1], b: [1, 1] }] };
+  run(T, 300); const q = T.comps[2];
+  console.log('npn on: Ic mA', (q.i * 1e3).toFixed(1), 'Ib mA', (q.ib * 1e3).toFixed(2), 'Vce', q.u.toFixed(3), 'Vbe', q.vbe.toFixed(3), 'burnt', !!q.p.burnt);
+  T.comps[3].p.r = 100000; run(T, 300); console.log('npn linear (100k): Ic mA', (q.i * 1e3).toFixed(2), 'Ib uA', (q.ib * 1e6).toFixed(1), 'Vce', q.u.toFixed(2));
+  T.comps[4].p.on = false; run(T, 300); console.log('npn off: Ic uA', (q.i * 1e6).toFixed(3), 'motor mA', (T.comps[1].i * 1e3).toFixed(3));
+  T.comps[4].p.on = true; T.comps[4].p.v = 5; T.comps[3].p.r = 1; run(T, 400); console.log('base overdriven: burnt', !!q.p.burnt);
+}
 // perf
 let t0 = Date.now(); run(S, 5000); console.log('ms/step', (Date.now() - t0) / 5000);

@@ -16,7 +16,7 @@ const E12 = []; for (let d = 1; d <= 5; d++) for (const m of [1, 1.2, 1.5, 1.8, 
 const ILIMS = [0.005, 0.01, 0.015, 0.02, 0.03, 0.05, 0.1, 0.2, 0.5, 1];
 const CAPS = [10e-6, 100e-6, 470e-6, 1000e-6, 2200e-6];
 
-const NAMES = { psu: ['Labornetzteil', 'Bench supply'], resistor: ['Widerstand', 'Resistor'], led: ['LED', 'LED'], sw: ['Schalter', 'Switch'], btn: ['Taster', 'Push button'], cap: ['Kondensator', 'Capacitor'], meter: ['Multimeter', 'Multimeter'], pot: ['Potentiometer', 'Potentiometer'], esp: ['ESP32', 'ESP32'] };
+const NAMES = { psu: ['Labornetzteil', 'Bench supply'], resistor: ['Widerstand', 'Resistor'], led: ['LED', 'LED'], sw: ['Schalter', 'Switch'], btn: ['Taster', 'Push button'], cap: ['Kondensator', 'Capacitor'], meter: ['Multimeter', 'Multimeter'], pot: ['Potentiometer', 'Potentiometer'], esp: ['ESP32', 'ESP32'], scope: ['Oszilloskop', 'Oscilloscope'], npn: ['Transistor', 'Transistor'], motor: ['Motor', 'Motor'] };
 const LEDN = { rot: ['Rot', 'Red'], gelb: ['Gelb', 'Yellow'], gruen: ['Grün', 'Green'], blau: ['Blau', 'Blue'] };
 const INFO = {
   psu: ['Liefert eine feste Spannung (CV). Wird mehr Strom gezogen als die Strombegrenzung erlaubt, senkt es die Spannung und hält den Strom konstant (CC).', 'Supplies a fixed voltage (CV). If the load draws more than the current limit allows, it lowers the voltage and holds the current constant (CC).'],
@@ -27,12 +27,16 @@ const INFO = {
   cap: ['Speichert Ladung. Lädt und entlädt sich über einen Widerstand mit der Zeitkonstante τ = R · C.', 'Stores charge. Charges and discharges through a resistor with the time constant τ = R · C.'],
   meter: ['Spannung misst du parallel zum Bauteil, Strom in Reihe im Stromkreis. Klick auf die Taste wechselt den Modus.', 'Measure voltage in parallel with a part and current in series with the circuit. Click the key to switch modes.'],
   pot: ['Einstellbarer Spannungsteiler. Der mittlere Anschluss ist der Schleifer. Knopf ziehen oder Mausrad drehen.', 'Adjustable voltage divider. The middle terminal is the wiper. Drag the knob or use the mouse wheel.'],
-  esp: ['Mikrocontroller mit 3,3-V-Logik, hier über USB versorgt. Ein GPIO liefert höchstens etwa 40 mA. D34 ist nur Eingang.', 'Microcontroller with 3.3 V logic, powered over USB here. A GPIO can source about 40 mA at most. D34 is input only.']
+  esp: ['Mikrocontroller mit 3,3-V-Logik, hier über USB versorgt. Ein GPIO liefert höchstens etwa 40 mA. D34 ist nur Eingang.', 'Microcontroller with 3.3 V logic, powered over USB here. A GPIO can source about 40 mA at most. D34 is input only.'],
+  scope: ['Zeigt, wie sich eine Spannung über die Zeit ändert. Rote Buchse an den Messpunkt, schwarze an GND. Unten links steht der Mittelwert.', 'Shows how a voltage changes over time. Red jack to the test point, black to GND. The mean is shown at the bottom left.'],
+  npn: ['NPN-Transistor als Schalter: ein kleiner Strom in die Basis (B) lässt einen großen Strom vom Kollektor (C) zum Emitter (E) fließen. Die Basis braucht immer einen Vorwiderstand.', 'NPN transistor as a switch: a small current into the base (B) lets a large current flow from collector (C) to emitter (E). The base always needs a series resistor.'],
+  motor: ['Gleichstrommotor für 5 V. Zieht rund 200 mA, viel mehr, als ein GPIO liefern darf.', 'DC motor for 5 V. Draws about 200 mA, far more than a GPIO may supply.']
 };
-const BOX = { psu: [-90, -60, 90, 44], resistor: [-40, -14, 40, 14], led: [-40, -18, 40, 18], sw: [-40, -15, 40, 15], btn: [-40, -18, 40, 18], cap: [-40, -20, 40, 20], meter: [-50, -62, 50, 42], pot: [-42, -32, 42, 42], esp: [-150, -70, 156, 58] };
+const BOX = { psu: [-90, -60, 90, 44], resistor: [-40, -14, 40, 14], led: [-40, -18, 40, 18], sw: [-40, -15, 40, 15], btn: [-40, -18, 40, 18], cap: [-40, -20, 40, 20], meter: [-50, -62, 50, 42], pot: [-42, -32, 42, 42], esp: [-150, -70, 156, 58], scope: [-80, -72, 80, 42], npn: [-42, -28, 42, 42], motor: [-40, -26, 40, 26] };
 const DEF = {
   psu: () => ({ v: 5, ilim: 0.5, on: true }), resistor: () => ({ r: 220 }), led: () => ({ color: 'rot' }), sw: () => ({ closed: false }), btn: () => ({}),
-  cap: () => ({ c: 1000e-6 }), meter: () => ({ mode: 'V' }), pot: () => ({ r: 10000, pos: 0.5 }), esp: () => ({ sketch: 'blink', params: {} })
+  cap: () => ({ c: 1000e-6 }), meter: () => ({ mode: 'V' }), pot: () => ({ r: 10000, pos: 0.5 }), esp: () => ({ sketch: 'blink', params: {} }),
+  scope: () => ({ vdiv: 1, tdiv: 0.05 }), npn: () => ({}), motor: () => ({})
 };
 
 /* ---------- Zeichnen der Bauteile ---------- */
@@ -116,6 +120,52 @@ const DRAW = {
       <text x="-44" y="-4" font-size="13" font-weight="600" fill="#e9eef1" opacity=".9">ESP32 DevKit</text>${pins}`;
   }
 };
+const fmtT = t => t >= 1 ? de(t, 0) + ' s' : Math.round(t * 1000) + ' ms';
+DRAW.scope = c => {
+  let g = ''; for (let i = 0; i <= 10; i++) g += `M${-70 + i * 12} -62V18`; for (let i = 0; i <= 8; i++) g += `M-70 ${-62 + i * 10}H50`;
+  return `<path class="lead" d="M-20 24V40M20 24V40"/><rect x="-80" y="-72" width="160" height="98" rx="9" fill="#dfe3e6" stroke="#8f9aa2"/>
+    <rect x="-74" y="-66" width="128" height="88" rx="4" fill="#0c1612"/><path class="sgrid" d="${g}"/><path class="szero" d="M-70 8H50"/><path class="trace" d=""/>
+    <text class="stxt" x="-67" y="-55">${de(c.p.vdiv, c.p.vdiv < 1 ? 1 : 0)} V/div</text><text class="stxt" x="47" y="-55" text-anchor="end">${fmtT(c.p.tdiv)}/div</text><text class="stxt avg" x="-67" y="15">Ø ${fmtV(0)}</text>
+    <circle cx="67" cy="-50" r="7" fill="#c5ccd1" stroke="#8b959c"/><circle cx="67" cy="-28" r="7" fill="#c5ccd1" stroke="#8b959c"/><path d="M67 -50v-6M67 -28l4 -4" stroke="#55646f" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="67" cy="-4" r="3" fill="#3ee06a"/>
+    <circle cx="-20" cy="22" r="5" fill="#d8432e"/><circle cx="20" cy="22" r="5" fill="#15191c"/>`;
+};
+DRAW.npn = c => `<path class="lead" d="M-10 12L-40 40M0 12V40M10 12L40 40"/>
+  <path d="M-18 -8A18 18 0 0 1 18 -8V13H-18Z" fill="${c.p.burnt ? '#3b2c25' : '#23282c'}" stroke="#0d1012" stroke-width="1.5"/><path d="M-18 13H18" stroke="#3d454b" stroke-width="2"/>
+  <text x="0" y="3" font-size="8" font-weight="600" fill="#aeb7bd" text-anchor="middle">NPN</text>
+  <text class="lbl" x="-36" y="27">C</text><text class="lbl" x="9" y="31">B</text><text class="lbl" x="36" y="27">E</text>${c.p.burnt ? `<text class="lbl" y="-32">${L('durchgebrannt', 'burnt out')}</text>` : ''}`;
+DRAW.motor = () => LEAD + `<circle r="24" fill="#aeb7bd" stroke="#6d767e" stroke-width="1.5"/><circle r="19" fill="#22282d"/>
+  <g class="rotor"><path d="M0 -17L5 0L0 17L-5 0Z" fill="#f2b705"/><path d="M-17 0L0 -5L17 0L0 5Z" fill="#f2b705" opacity=".75"/></g><circle r="4" fill="#dfe3e6"/>
+  <text class="lbl" x="-33" y="-10">+</text>`;
+/* Oszilloskop: Messwerte in einem Ringspeicher, gezeichnet wird das letzte Zeitfenster */
+const SCOPE_N = 16384;
+function scopeSample(c) {
+  if (!c.bt) { c.bt = new Float64Array(SCOPE_N); c.bu = new Float32Array(SCOPE_N); c.bi = 0; c.bn = 0; }
+  c.bt[c.bi] = S.t; c.bu[c.bi] = c.u; c.bi = (c.bi + 1) % SCOPE_N; if (c.bn < SCOPE_N) c.bn++;
+}
+function scopeDraw(c, q) {
+  const W = c.p.tdiv * 10, t1 = S.t, t0 = t1 - W, lo = new Float32Array(120).fill(1e9), hi = new Float32Array(120).fill(-1e9);
+  let sum = 0, cnt = 0, up = 0, mn = 1e9, mx = -1e9;
+  for (let k = 0; k < (c.bn | 0); k++) {
+    const i = (c.bi - 1 - k + SCOPE_N) % SCOPE_N, t = c.bt[i], u = c.bu[i], rec = t1 - t <= 0.25;
+    if (rec) { sum += u; cnt++; if (u > 1.65) up++; if (u < mn) mn = u; if (u > mx) mx = u; }
+    if (t < t0) { if (rec) continue; break; }
+    const col = Math.min(119, Math.floor((t - t0) / W * 120));
+    if (u < lo[col]) lo[col] = u; if (u > hi[col]) hi[col] = u;
+  }
+  c.avg = cnt ? sum / cnt : 0; c.duty = cnt ? up / cnt : 0; c.vmin = cnt ? mn : 0; c.vmax = cnt ? mx : 0;
+  const y = u => Math.round(clamp(8 - u / c.p.vdiv * 10, -62, 18) * 10) / 10;
+  let d = '', py = null;
+  for (let col = 0; col < 120; col++) {
+    if (hi[col] < lo[col]) continue;
+    const a = y(lo[col]), b = y(hi[col]), x = -69.5 + col;
+    if (py === null) { d = `M${x} ${a}`; if (b !== a) d += `V${b}`; py = b; continue; }
+    const near = Math.abs(a - py) <= Math.abs(b - py) ? a : b, far = near === a ? b : a;
+    d += `H${x}`; if (near !== py) d += `V${near}`; if (far !== near) d += `V${far}`; py = far;
+  }
+  q('.trace').setAttribute('d', d);
+  if (fr % 6 === 0) q('.avg').textContent = 'Ø ' + fmtV(c.avg);
+}
 function drawComp(c) {
   const b = BOX[c.type];
   let s = `<rect class="selbox" x="${b[0] - 6}" y="${b[1] - 6}" width="${b[2] - b[0] + 12}" height="${b[3] - b[1] + 12}" rx="8"/><g class="body">` + DRAW[c.type](c) + '</g>';
@@ -145,6 +195,7 @@ function resetView() {
     const k = r.height / r.width;
     view.w = Math.max(r.width / 0.68, x1 - x0 + 50, (y1 - y0 + 110) / k);
     view.x = (x0 + x1) / 2 - view.w / 2; view.y = (y0 + y1) / 2 - view.w * k / 2;
+    view.y = Math.min(view.y, y0 - 56 * view.w / r.width);   // Platz für die Anzeigen am oberen Rand
   }
   applyView();
 }
@@ -276,14 +327,15 @@ function delSel() {
 }
 function rotSel() { if (!sel || !sel.c) return; pushUndo(); sel.c.rot = ((sel.c.rot || 0) + 1) % 4; setTf(sel.c); S.wires.forEach(updWire); snd('tick'); }
 const WCOL = ['#f2c230', '#35c46a', '#f5f5f0', '#f08a1c', '#b98cff', '#4fb6ff']; let wcI = 0;
-function addWire(a, b) {
+function addWire(a, b, quiet) {
   if (S.wires.some(w => (w.a[0] === a[0] && w.a[1] === a[1] && w.b[0] === b[0] && w.b[1] === b[1]) || (w.a[0] === b[0] && w.a[1] === b[1] && w.b[0] === a[0] && w.b[1] === a[1]))) return snd('err');
-  pushUndo();
+  if (!quiet) pushUndo();
   const la = TERMS[comp(a[0]).type][a[1]][2], lb = TERMS[comp(b[0]).type][b[1]][2];
   const is = (l, s) => s.includes(l);
   const col = is(la, ['3V3']) || is(lb, ['3V3']) || ((la === '+' || lb === '+') && (comp(a[0]).type === 'psu' || comp(b[0]).type === 'psu')) ? '#e0442f'
     : is(la, ['GND']) || is(lb, ['GND']) || ((la === '−' || lb === '−') && (comp(a[0]).type === 'psu' || comp(b[0]).type === 'psu')) ? '#20262b' : WCOL[wcI++ % WCOL.length];
   const w = { id: nextId++, a, b, col }; S.wires.push(w); mountWire(w);
+  if (quiet) return;
   const p = termPos(comp(b[0]), b[1]); sparks(p[0], p[1]); snd('connect');
 }
 
@@ -481,6 +533,9 @@ function renderInspector() {
     h += `<div class="seg-ctl" role="group" aria-label="${L('Gesamtwiderstand', 'Total resistance')}">` + [1000, 10000, 100000].map(v => `<button type="button" data-potr="${v}" aria-pressed="${p.r === v}">${fmtR(v)}</button>`).join('') + '</div>';
   } else if (c.type === 'meter') h += `<div class="seg-ctl" role="group" aria-label="${L('Messmodus', 'Mode')}"><button type="button" data-mode="V" aria-pressed="${p.mode === 'V'}">${L('Spannung', 'Voltage')}</button><button type="button" data-mode="A" aria-pressed="${p.mode === 'A'}">${L('Strom', 'Current')}</button></div>`;
   else if (c.type === 'sw') h += `<div class="row"><button type="button" class="btn${p.closed ? ' on' : ''}" data-do="toggle" aria-pressed="${p.closed}">${p.closed ? L('Geschlossen', 'Closed') : L('Offen', 'Open')}</button></div>`;
+  else if (c.type === 'scope') h += `<div class="ctl"><span>${L('Spannung pro Kästchen', 'Volts per division')}</span></div><div class="seg-ctl" role="group" aria-label="${L('Spannung pro Kästchen', 'Volts per division')}">` + [0.5, 1, 2].map(v => `<button type="button" data-vdiv="${v}" aria-pressed="${p.vdiv === v}">${de(v, v < 1 ? 1 : 0)} V</button>`).join('')
+    + `</div><div class="ctl"><span>${L('Zeit pro Kästchen', 'Time per division')}</span></div><div class="seg-ctl" role="group" aria-label="${L('Zeit pro Kästchen', 'Time per division')}">` + [0.01, 0.05, 0.2, 1].map(v => `<button type="button" data-tdiv="${v}" aria-pressed="${p.tdiv === v}">${fmtT(v)}</button>`).join('') + '</div>';
+  else if (c.type === 'npn') h += (p.burnt ? `<div class="row"><button type="button" class="btn on" data-do="fix">${L('Neuen Transistor einsetzen', 'Fit a new transistor')}</button></div>` : '') + `<p>${L('Basisstrom', 'Base current')}: <b id="ro-b" class="num">–</b></p>`;
   if (c.type !== 'esp') h += `<dl class="ro"><div><dt>${L('Spannung', 'Voltage')}</dt><dd id="ro-v" class="num">–</dd></div><div><dt>${L('Strom', 'Current')}</dt><dd id="ro-i" class="num">–</dd></div><div><dt>${L('Leistung', 'Power')}</dt><dd id="ro-p" class="num">–</dd></div></dl>`;
   el.innerHTML = h;
 }
@@ -524,10 +579,12 @@ insp.addEventListener('click', e => {
   if (d.do === 'rot') return rotSel();
   if (d.do === 'power') c.p.on = !c.p.on;
   else if (d.do === 'toggle') c.p.closed = !c.p.closed;
-  else if (d.do === 'fix') { c.p.burnt = false; c.over = 0; c.vd = 0; snd('place'); pop(c); }
+  else if (d.do === 'fix') { c.p.burnt = false; c.over = 0; c.vd = 0; c.vbe = 0; c.vbc = 0; snd('place'); pop(c); }
   else if (d.col) { c.p.color = d.col; c.vd = 0; }
   else if (d.potr) c.p.r = +d.potr;
   else if (d.capc) c.p.c = +d.capc;
+  else if (d.vdiv) c.p.vdiv = +d.vdiv;
+  else if (d.tdiv) c.p.tdiv = +d.tdiv;
   else if (d.mode) c.p.mode = d.mode;
   else return;
   if (!d.do || d.do !== 'fix') snd('toggle');
@@ -593,7 +650,7 @@ $('#skSel').addEventListener('change', e => { const esp = S.comps.find(c => c.ty
 const by = t => S.comps.filter(c => c.type === t);
 const lit = (c, lo, hi) => c && !c.p.burnt && c.iA >= lo && c.iA <= hi;
 const adcWired = e => S.wires.some(w => { const a = comp(w.a[0]), b = comp(w.b[0]); return (a === e && w.a[1] === 6 && b.type === 'pot' && w.b[1] === 1) || (b === e && w.b[1] === 6 && a.type === 'pot' && w.a[1] === 1); });
-const ALL = ['psu', 'resistor', 'led', 'sw', 'btn', 'pot', 'cap', 'meter', 'esp'];
+const ALL = ['psu', 'resistor', 'led', 'sw', 'btn', 'pot', 'cap', 'npn', 'motor', 'meter', 'scope', 'esp'];
 const CH1 = ['Grundlagen', 'Basics'], CH2 = ['ESP32', 'ESP32'], CH3 = ['Freies Labor', 'Free lab'];
 const LEVELS = [
   { id: 'kreis', ch: CH1, title: ['Der erste Stromkreis', 'Your first circuit'],
@@ -642,7 +699,7 @@ const LEVELS = [
   { id: 'rc', ch: CH1, title: ['Kondensator als Energiespeicher', 'A capacitor stores energy'],
     text: [`<p>Ein Kondensator lädt sich auf die anliegende Spannung auf und gibt die Ladung wieder ab, wenn die Quelle fehlt. Wie lange das dauert, bestimmt die Zeitkonstante:</p><p class="formula">τ = R · C</p><p>Baue: Netzteil → Schalter → Kondensator parallel zu Widerstand plus LED. Öffnest du den Schalter, soll die LED noch mindestens eine Sekunde nachleuchten.</p>`,
       `<p>A capacitor charges up to the applied voltage and releases the charge again once the source is gone. The time constant sets how long that takes:</p><p class="formula">τ = R · C</p><p>Build: supply → switch → capacitor in parallel with resistor plus LED. When you open the switch, the LED should keep glowing for at least one second.</p>`],
-    tray: ['resistor', 'led', 'sw', 'cap', 'meter'], lock: { v: 1 },
+    tray: ['resistor', 'led', 'sw', 'cap', 'meter', 'scope'], lock: { v: 1 },
     build: () => [mk('psu', 160, 260, { v: 5 }), mk('sw', 400, 120), mk('cap', 560, 260, { c: 2200e-6 }), mk('resistor', 700, 160, { r: 470 }), mk('led', 840, 300)],
     goals: [[['Schalter ein: die LED leuchtet', 'Switch on: the LED is lit'], () => { if (by('sw').some(s => s.p.closed) && by('led').some(l => lit(l, .002, .025))) mem.on = 1; return mem.on; }],
       [['Schalter aus: die LED leuchtet 1 s nach', 'Switch off: the LED glows on for 1 s'], (dt) => { const open = by('sw').length && by('sw').every(s => !s.p.closed); mem.glow = open && mem.on && by('led').some(l => l.iA > 3e-4) ? (mem.glow || 0) + dt : 0; if (mem.glow > 1) mem.ok = 1; return mem.ok; }]],
@@ -650,7 +707,7 @@ const LEVELS = [
   { id: 'blink', ch: CH2, title: ['Blink: der erste Sketch', 'Blink: your first sketch'],
     text: [`<p>Ein GPIO-Pin des ESP32 ist ein per Software geschalteter Ausgang: <code>HIGH</code> bedeutet 3,3 V, <code>LOW</code> bedeutet 0 V. Der Sketch im Code-Feld schaltet Pin D2 im Takt.</p><p>Schließe die LED mit Vorwiderstand zwischen D2 und GND an. Pin und Pause kannst du direkt im Code ändern.</p>`,
       `<p>A GPIO pin of the ESP32 is an output switched by software: <code>HIGH</code> means 3.3 V, <code>LOW</code> means 0 V. The sketch in the code panel toggles pin D2 in a steady rhythm.</p><p>Connect the LED with its series resistor between D2 and GND. You can change the pin and the pause right in the code.</p>`],
-    tray: ['resistor', 'led'], sketch: 'blink', sketchLock: 1,
+    tray: ['resistor', 'led', 'scope'], sketch: 'blink', sketchLock: 1,
     build: () => [mk('esp', 340, 200, { sketch: 'blink' }), mk('resistor', 420, 420), mk('led', 640, 420)],
     goals: [[['Die LED geht an (3 bis 20 mA)', 'The LED turns on (3 to 20 mA)'], () => { if (by('led').some(l => lit(l, .003, .02))) mem.on = 1; return mem.on; }], [['Sie blinkt mindestens dreimal', 'It blinks at least three times'], () => { const on = by('led').some(l => l.iA > .003); if (on && !mem.was) mem.n = (mem.n || 0) + 1; mem.was = on; return mem.n >= 3; }]],
     hints: [['D2 → Widerstand → LED-Plus, LED-Minus → GND.', 'D2 → resistor → LED plus, LED minus → GND.'], ['Wählst du im Code einen anderen Pin, muss auch das Kabel an diesen Pin.', 'If you pick another pin in the code, the wire has to move to that pin too.']] },
@@ -671,6 +728,25 @@ const LEVELS = [
       [['ADC-Wert über 3800 gesehen', 'ADC value above 3800 seen'], () => { const e = by('esp')[0]; if (e && e.adc > 3800 && adcWired(e)) mem.hi = 1; return mem.hi; }],
       [['Die LED folgt: einmal dunkel, einmal hell', 'The LED follows: dark once, bright once'], () => { const e = by('esp')[0]; if (!e) return 0; if (by('led').some(l => l.iA > .004) && e.adc > 3000) mem.b = 1; if (adcWired(e) && e.adc < 500 && by('led').length && by('led').every(l => l.iA < .001) && S.wires.some(w => by('led').some(l => w.a[0] === l.id || w.b[0] === l.id))) mem.d = 1; return mem.b && mem.d; }]],
     hints: [['Poti links → GND, Mitte → D34, rechts → 3V3. So steigt der Wert beim Drehen nach rechts.', 'Pot left → GND, middle → D34, right → 3V3. That way the value rises as you turn right.'], ['LED: D5 → Widerstand → LED-Plus, LED-Minus → GND.', 'LED: D5 → resistor → LED plus, LED minus → GND.']] },
+  { id: 'pwm', ch: CH2, title: ['PWM auf dem Oszilloskop', 'PWM on the oscilloscope'],
+    text: [`<p>PWM heißt Pulsweitenmodulation: der Pin kennt nur 0 V und 3,3 V, schaltet aber so schnell hin und her, dass die LED für das Auge gleichmäßig leuchtet. Der Tastgrad, also der Anteil der Ein-Zeit, bestimmt die Helligkeit.</p><p>Die Schaltung aus der letzten Lektion ist schon aufgebaut. Schließe das Oszilloskop an: rote Buchse an D5, schwarze an GND. Dreh dann am Poti und beobachte, wie die Pulse breiter und schmaler werden.</p><p class="muted">Die Simulation zeigt PWM stark verlangsamt, ein echter ESP32 schaltet viel schneller.</p>`,
+      `<p>PWM stands for pulse width modulation: the pin only knows 0 V and 3.3 V, but it switches back and forth so quickly that the LED looks evenly lit. The duty cycle, the share of on-time, sets the brightness.</p><p>The circuit from the last lesson is already built. Connect the oscilloscope: red jack to D5, black jack to GND. Then turn the pot and watch the pulses get wider and narrower.</p><p class="muted">The simulation shows PWM heavily slowed down; a real ESP32 switches much faster.</p>`],
+    tray: ['meter', 'scope'], sketch: 'dimmer', sketchLock: 1,
+    build: () => [mk('esp', 340, 180, { sketch: 'dimmer' }), mk('pot', 200, 420), mk('resistor', 520, 440), mk('led', 720, 440), mk('scope', 840, 220, { vdiv: 1, tdiv: 0.01 })],
+    wires: [[1, 0, 0, 1], [1, 1, 0, 6], [1, 2, 0, 0], [0, 4, 2, 0], [2, 1, 3, 0], [3, 1, 0, 1]],
+    goals: [[['Das Oszilloskop zeigt ein Rechtecksignal zwischen 0 und 3,3 V', 'The oscilloscope shows a square wave between 0 and 3.3 V'], (dt) => { mem.t1 = by('scope').some(s => s.vmax > 2.8 && s.vmin < .4 && s.duty > .04 && s.duty < .96) ? (mem.t1 || 0) + dt : 0; if (mem.t1 > .4) mem.sq = 1; return mem.sq; }],
+      [['Schmale Pulse gesehen: Tastgrad unter 25 %', 'Narrow pulses seen: duty cycle below 25 %'], (dt) => { mem.t2 = by('scope').some(s => s.vmax > 2.8 && s.duty > .02 && s.duty < .25) ? (mem.t2 || 0) + dt : 0; if (mem.t2 > .5) mem.lo = 1; return mem.lo; }],
+      [['Breite Pulse gesehen: Tastgrad über 75 %', 'Wide pulses seen: duty cycle above 75 %'], (dt) => { mem.t3 = by('scope').some(s => s.vmax > 2.8 && s.vmin < .4 && s.duty > .75 && s.duty < .98) ? (mem.t3 || 0) + dt : 0; if (mem.t3 > .5) mem.hi = 1; return mem.hi; }]],
+    hints: [['Zwei Kabel genügen: rote Oszilloskop-Buchse → D5, schwarze → GND.', 'Two wires are enough: red oscilloscope jack → D5, black → GND.'], ['Der Wert unten links im Bild ist die mittlere Spannung. Bei 50 % Tastgrad liegt sie bei der Hälfte von 3,3 V.', 'The value at the bottom left of the screen is the mean voltage. At 50 % duty cycle it is half of 3.3 V.']] },
+  { id: 'transistor', ch: CH2, title: ['Transistor als Schalter', 'A transistor as a switch'],
+    text: [`<p>Ein GPIO liefert nur wenige Milliampere. Der Motor braucht rund 200 mA, direkt am Pin würde er den ESP32 überlasten. Ein Transistor löst das: ein kleiner Basisstrom schaltet einen großen Strom zwischen Kollektor und Emitter.</p><p>Baue: Netzteil-Plus → Motor → Kollektor (C), Emitter (E) → Netzteil-Minus. Pin D2 steuert über 1 kΩ die Basis (B). Wichtig: Netzteil-Minus und GND des ESP32 müssen verbunden sein, sonst hat der Basisstrom keinen Rückweg.</p><p class="muted">An einem echten Motor gehört zusätzlich eine Freilaufdiode parallel. Sie wird hier nicht simuliert.</p>`,
+      `<p>A GPIO supplies only a few milliamps. The motor needs about 200 mA; directly on the pin it would overload the ESP32. A transistor solves that: a small base current switches a large current between collector and emitter.</p><p>Build: supply plus → motor → collector (C), emitter (E) → supply minus. Pin D2 drives the base (B) through 1 kΩ. Important: supply minus and the ESP32's GND must be connected, otherwise the base current has no return path.</p><p class="muted">A real motor also needs a flyback diode in parallel. It is not simulated here.</p>`],
+    tray: ['resistor', 'led', 'npn', 'motor', 'meter', 'scope'], sketch: 'blink', sketchLock: 1, lock: { v: 1 },
+    build: () => [mk('esp', 340, 180, { sketch: 'blink' }), mk('psu', 160, 440, { v: 5 }), mk('resistor', 440, 400, { r: 1000 }), mk('npn', 620, 400), mk('motor', 820, 300)],
+    goals: [[['Der Motor läuft mit über 100 mA', 'The motor runs at more than 100 mA'], () => { if (by('motor').some(m => m.iA > .1)) mem.on = 1; return mem.on; }],
+      [['Der GPIO liefert dabei unter 10 mA', 'The GPIO supplies less than 10 mA while it runs'], () => { const e = by('esp')[0]; if (e && by('motor').some(m => m.iA > .1) && by('npn').some(q => q.i > .1) && Object.values(e.pins).every(P => (P.mode !== 'out' && P.mode !== 'pwm') || Math.abs(P.i || 0) < .01)) mem.g = 1; return mem.g; }],
+      [['Der ESP32 schaltet den Motor aus und wieder ein', 'The ESP32 switches the motor off and on again'], () => { const on = by('motor').some(m => m.iA > .1) && by('npn').some(q => q.i > .1), off = by('motor').length && by('motor').every(m => Math.abs(m.iA) < .005); if (mem.g && off) mem.wasOff = 1; if (mem.wasOff && on) mem.again = 1; return mem.again; }]],
+    hints: [['D2 → 1 kΩ → B. Netzteil-Plus → Motor-Plus, Motor-Minus → C. E → Netzteil-Minus und zusätzlich E → GND am ESP32.', 'D2 → 1 kΩ → B. Supply plus → motor plus, motor minus → C. E → supply minus and also E → GND on the ESP32.'], ['Probiere es ruhig aus: Motor direkt zwischen D2 und GND. Er dreht kaum, und die Statuszeile meldet die Überlast am Pin.', 'Go ahead and try it: motor directly between D2 and GND. It barely turns, and the status line reports the overload on the pin.']] },
   { id: 'labor', ch: CH3, title: ['Freies Labor', 'Free lab'],
     text: [`<p>Alle Bauteile, keine Aufgabe. Bau, was du willst, und probiere aus, was passiert: Kurzschluss am Netzteil, 9 V an 47 Ω, LED verkehrt herum.</p><p>Für den ESP32 wählst du den Sketch über dem Code aus.</p>`,
       `<p>Every part, no task. Build whatever you like and see what happens: a short across the supply, 9 V on 47 Ω, an LED in backwards.</p><p>For the ESP32, pick the sketch above the code.</p>`],
@@ -680,6 +756,7 @@ const LEVELS = [
 function loadLevel(i, keepDone) {
   levelIdx = i; level = LEVELS[i]; store.level = i; save();
   nextId = 1; S.comps = level.build(); S.wires = []; S.topo = true; S.t = 0; undo = []; mem = {}; doneHold = 0; completed = false; hintN = 0; wcI = 0;
+  (level.wires || []).forEach(w => addWire([w[0] + 1, w[1]], [w[2] + 1, w[3]], true));   // vorverdrahtete Aufbauten: [Bauteil, Anschluss, Bauteil, Anschluss]
   renderAll(); renderLesson(); renderNav(); resetView();
 }
 function renderNav() {
@@ -757,7 +834,8 @@ function frame(ts) {
   for (let k = 0; k < 8; k++) {
     if (esp) runSketch(esp);
     simStep(S, dtR / 8);
-    for (const c of S.comps) if (c.ev === 'burn') { rerender(c); smoke(c.x, c.y); snd('burn'); toast(c.type === 'led' ? L('Die LED ist durchgebrannt: zu viel Strom.', 'The LED burnt out: too much current.') : L('Der Widerstand ist durchgebrannt: über 1 W an einem 0,25-W-Bauteil.', 'The resistor burnt out: more than 1 W on a 0.25 W part.'), 'bad'); if (sel && sel.c === c) renderInspector(); }
+    for (const c of S.comps) if (c.type === 'scope') scopeSample(c);
+    for (const c of S.comps) if (c.ev === 'burn') { rerender(c); smoke(c.x, c.y); snd('burn'); toast(c.type === 'npn' ? L('Der Transistor ist durchgebrannt: zu viel Strom.', 'The transistor burnt out: too much current.') : c.type === 'led' ? L('Die LED ist durchgebrannt: zu viel Strom.', 'The LED burnt out: too much current.') : L('Der Widerstand ist durchgebrannt: über 1 W an einem 0,25-W-Bauteil.', 'The resistor burnt out: more than 1 W on a 0.25 W part.'), 'bad'); if (sel && sel.c === c) renderInspector(); }
   }
   for (const c of S.comps) {
     const q = s => c.el.querySelector(s);
@@ -768,6 +846,12 @@ function frame(ts) {
     } else if (c.type === 'meter') q('.lcd').textContent = c.p.mode === 'V' ? fmtV(c.valA || 0) : fmtI(Math.abs(c.valA) < 5e-6 ? 0 : c.valA);
     else if (c.type === 'esp') { const P = c.pins[2]; c.ob = (c.ob || 0) + .3 * ((P && P.hi && P.mode !== 'in' ? 1 : 0) - (c.ob || 0)); q('.obled').setAttribute('opacity', c.ob); }
     else if (c.type === 'resistor' && !c.p.burnt) q('.rbody').classList.toggle('hot', c.pw > 0.25);
+    else if (c.type === 'scope') scopeDraw(c, q);
+    else if (c.type === 'motor') {
+      const tgt = Math.sign(c.iA) * clamp((Math.abs(c.iA) - 0.03) / 0.17, 0, 1.6) * 900;
+      c.w = (c.w || 0) + Math.min(1, dtR * 4) * (tgt - (c.w || 0)); c.ang = ((c.ang || 0) + c.w * dtR) % 360;
+      q('.rotor').setAttribute('transform', `rotate(${c.ang.toFixed(1)})`);
+    }
   }
   for (const w of S.wires) {
     const f = w.el.lastChild, i = w.iA || 0, m = Math.abs(i);
@@ -777,7 +861,7 @@ function frame(ts) {
   }
   if (fr % 6 === 0) {
     if (sel) { const o = sel.c || sel.w, set = (id, t) => { const e = $(id); if (e) e.textContent = t; };
-      set('#ro-i', fmtI(sel.w ? Math.abs(o.iA || 0) : (o.iA || 0)));
+      set('#ro-i', fmtI(sel.w ? Math.abs(o.iA || 0) : (o.iA || 0))); set('#ro-b', fmtI(o.ibA || 0));
       if (sel.c) { set('#ro-v', fmtV(o.u || 0)); set('#ro-p', fmtP(Math.abs((o.u || 0) * (o.iA || 0)))); } }
     if (esp) {
       let h = ''; for (const k of [2, 4, 5, 18, 34]) { const P = esp.pins[k]; h += `<tr><td>D${k}</td><td>${!P ? '–' : P.mode === 'out' ? 'OUTPUT' : P.mode === 'pwm' ? 'PWM ' + Math.round(P.duty * 100) + ' %' : P.mode === 'in_pullup' ? 'INPUT_PULLUP' : k === 34 && esp.p.sketch === 'dimmer' ? 'ADC ' + esp.adc : 'INPUT'}</td><td class="num">${fmtV(esp.pv ? esp.pv[k] || 0 : 0)}</td></tr>`; }

@@ -1,5 +1,6 @@
 /* ---------- Schaltungssimulation: Knotenanalyse mit Newton-Iteration ---------- */
 const GMIN = 1e-10, RW = 0.05, RS = 0.01, NVT = 2 * 0.02585;
+const VT = 0.02585, BJT_IS = 1e-14, BJT_BF = 200, BJT_BR = 2, MOTOR_R = 25, PWM_STEPS = 8;
 const LED_TYPES = {
   rot:   { vf: 1.9, c: '#ff4a3d', n: 'Rot' },
   gelb:  { vf: 2.0, c: '#ffc531', n: 'Gelb' },
@@ -15,6 +16,9 @@ const TERMS = {
   cap: [[-40, 0, '+'], [40, 0, '−']],
   meter: [[-20, 40, '+'], [20, 40, '−']],
   pot: [[-40, 40], [0, 40], [40, 40]],
+  scope: [[-20, 40, '+'], [20, 40, '−']],
+  npn: [[-40, 40, 'C'], [0, 40, 'B'], [40, 40, 'E']],
+  motor: [[-40, 0, '+'], [40, 0, '−']],
   esp: [[-120, 40, '3V3'], [-80, 40, 'GND'], [-40, 40, 'D2'], [0, 40, 'D4'], [40, 40, 'D5'], [80, 40, 'D18'], [120, 40, 'D34']]
 };
 const ESP_PIN = { 2: 2, 4: 3, 5: 4, 18: 5, 34: 6 };
@@ -57,15 +61,21 @@ function simAssign(S) {
 }
 function simStep(S, dt) {
   if (S.topo || !S.v) simAssign(S);
-  S.t += dt;
+  S.t += dt; S.k = ((S.k | 0) + 1) % PWM_STEPS;
   const n = S.n; if (!n) return;
   const A = S.A, b = S.b, x = S.x, v = S.v;
   const G = (a, c, g) => { A[a * n + a] += g; A[c * n + c] += g; A[a * n + c] -= g; A[c * n + a] -= g; };
   const I = (a, c, i) => { b[a] -= i; b[c] += i; };           // Strom i fließt im Bauteil von a nach c
+  const VC = (a, c, p, q, g) => { A[a * n + p] += g; A[a * n + q] -= g; A[c * n + p] -= g; A[c * n + q] += g; };   // Strom g·(Up − Uq) von a nach c
 
   for (const c of S.comps) if (c.type === 'esp') {
     c.nt = (c.nt || 0) - dt; if (c.nt <= 0) { c.nt = 0.04; c.vn = Math.random() * 3.3; }
-    for (const k in c.pins) { const P = c.pins[k]; if (P.mode === 'pwm') { P.acc = (P.acc || 0) + P.duty; if (P.acc >= 1) { P.acc -= 1; P.hi = 1; } else P.hi = 0; } }
+    /* PWM: eine Periode dauert PWM_STEPS Rechenschritte; der Rest der Rundung wandert in die nächste Periode */
+    for (const k in c.pins) {
+      const P = c.pins[k]; if (P.mode !== 'pwm') continue;
+      if (S.k === 0 || P.n == null) { const f = P.duty * PWM_STEPS + (P.car || 0); P.n = Math.floor(f + 1e-9); P.car = f - P.n; }
+      P.hi = S.k < P.n ? 1 : 0;
+    }
   }
   const wn = [];
   for (const w of S.wires) {
@@ -86,6 +96,20 @@ function simStep(S, dt) {
           case 'sw': if (p.closed) G(N[0], N[1], 100); break;
           case 'btn': if (c.pressed) G(N[0], N[1], 100); break;
           case 'meter': G(N[0], N[1], p.mode === 'V' ? 1e-7 : 1 / RW); break;
+          case 'scope': G(N[0], N[1], 1e-7); break;
+          case 'motor': G(N[0], N[1], 1 / MOTOR_R); break;
+          case 'npn': {
+            /* Ebers-Moll: Dioden B-E und B-C, dazu der gesteuerte Strom von C nach E */
+            if (p.burnt) break;
+            const vbe = c.vbe || 0, vbc = c.vbc || 0, ebe = Math.exp(vbe / VT), ebc = Math.exp(vbc / VT);
+            const gbe = BJT_IS / BJT_BF / VT * ebe + 1e-9, gbc = BJT_IS / BJT_BR / VT * ebc + 1e-9;
+            G(N[1], N[2], gbe); I(N[1], N[2], BJT_IS / BJT_BF * (ebe - 1) - gbe * vbe);
+            G(N[1], N[0], gbc); I(N[1], N[0], BJT_IS / BJT_BR * (ebc - 1) - gbc * vbc);
+            const gmf = BJT_IS / VT * ebe, gmr = BJT_IS / VT * ebc;
+            VC(N[0], N[2], N[1], N[2], gmf); VC(N[0], N[2], N[1], N[0], -gmr);
+            I(N[0], N[2], BJT_IS * (ebe - ebc) - gmf * vbe + gmr * vbc);
+            break;
+          }
           case 'pot': G(N[0], N[1], 1 / (p.r * p.pos + 1)); G(N[1], N[2], 1 / (p.r * (1 - p.pos) + 1)); break;
           case 'cap': { const g = p.c / dt; G(N[0], N[1], g); I(N[0], N[1], -g * (c.vc || 0)); break; }
           case 'psu':
@@ -121,6 +145,12 @@ function simStep(S, dt) {
         if (Math.abs(vl - old) > 1e-7) conv = false;
         c.vd = vl;
       }
+      for (const c of S.comps) if (c.type === 'npn' && !c.p.burnt) {
+        const N = c.n, o1 = c.vbe || 0, o2 = c.vbc || 0;
+        c.vbe = pnjlim(x[N[1]] - x[N[2]], o1, VT, VT * Math.log(VT / (1.414 * BJT_IS / BJT_BF)));
+        c.vbc = pnjlim(x[N[1]] - x[N[0]], o2, VT, VT * Math.log(VT / (1.414 * BJT_IS / BJT_BR)));
+        if (Math.abs(c.vbe - o1) > 1e-7 || Math.abs(c.vbc - o2) > 1e-7) conv = false;
+      }
     }
     let flip = false;
     for (const c of S.comps) if (c.type === 'psu' && c.p.on) {
@@ -153,6 +183,18 @@ function simStep(S, dt) {
       case 'btn': c.i = c.pressed ? u * 100 : 0; break;
       case 'meter': c.i = p.mode === 'V' ? 0 : u / RW; c.val = p.mode === 'V' ? u : c.i; c.valA = (c.valA || 0) + a * (c.val - (c.valA || 0)); break;
       case 'cap': c.i = p.c / dt * (u - (c.vc || 0)); c.vc = u; break;
+      case 'scope': c.i = 0; break;
+      case 'motor': c.i = u / MOTOR_R; c.pw = c.i * u; break;
+      case 'npn': {
+        c.u = v[N[0]] - v[N[2]];
+        if (p.burnt) { c.i = 0; c.ib = 0; c.ibA = 0; break; }
+        const ebe = Math.exp((c.vbe || 0) / VT), ebc = Math.exp((c.vbc || 0) / VT), ibc = BJT_IS / BJT_BR * (ebc - 1);
+        c.i = BJT_IS * (ebe - ebc) - ibc; c.ib = BJT_IS / BJT_BF * (ebe - 1) + ibc; c.ibA = (c.ibA || 0) + a * (c.ib - (c.ibA || 0));
+        c.pw = Math.abs(c.u * c.i) + Math.abs((v[N[1]] - v[N[2]]) * c.ib);
+        c.over = Math.max(0, (c.over || 0) + (c.pw > 0.8 || Math.abs(c.ib) > 0.1 || Math.abs(c.i) > 1 ? dt : -dt));
+        if (c.over > 0.3) { p.burnt = true; c.ev = 'burn'; }
+        break;
+      }
       case 'pot': c.i = u / (p.r * p.pos + 1); c.uw = v[N[1]] - v[N[2]]; break;
       case 'psu':
         if (!p.on) { c.i = 0; c.cc = false; } else c.i = c.cc ? p.ilim : (p.v - u) / RS;

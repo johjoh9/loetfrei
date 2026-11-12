@@ -129,6 +129,9 @@ input[type=number],select{background:var(--panel-2);border:1px solid var(--line)
 .lead{stroke:#c5ccd1;stroke-width:3;stroke-linecap:round;fill:none}
 .lbl{font:600 11px var(--f-body);fill:rgba(255,255,255,.88);text-anchor:middle;pointer-events:none}
 .silk{font:500 7.5px var(--f-body);fill:#cdd7dd;text-anchor:middle}
+.sgrid{fill:none;stroke:#27453a;stroke-width:.6}.szero{stroke:#6aa58a;stroke-width:.8}
+.trace{fill:none;stroke:#4dff9a;stroke-width:1.4;stroke-linejoin:round}
+.stxt{font:600 6.5px var(--f-mono);fill:#9fd9b8;pointer-events:none}
 .lcd{font:600 16px var(--f-mono);fill:#1b291b}
 .seg{font:600 17px var(--f-mono);fill:#4dff9a}.seg.da{font-size:14px;fill:#ffcf4d}
 .pmode{font:700 10px var(--f-body);fill:#a9b3ba}.pmode.cv.act{fill:#17895a}.pmode.ccm.act{fill:#cf3f2b}
@@ -213,6 +216,8 @@ input[type=number],select{background:var(--panel-2);border:1px solid var(--line)
   .benchwrap{height:58vh;height:min(58svh,600px);min-height:320px}
   #goalChip:not([hidden]){display:block}
   #status{max-width:calc(100% - 20px);bottom:auto;top:44px;left:10px}
+  #status:not(.warn):not(.bad){display:none}
+  .zoom{top:auto;bottom:10px;grid-auto-flow:column}
   .traywrap{padding:8px 12px}
   .traywrap h2{display:none}
   .part{width:78px;touch-action:pan-x}

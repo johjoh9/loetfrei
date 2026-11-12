@@ -14,11 +14,11 @@ Lötfrei ersetzt dafür die Werkbank: Netzteil, Widerstände, LEDs und ein ESP32
 
 ## Was man damit machen kann
 
-- **Schaltungen bauen:** Bauteile aus dem Baukasten auf die Werkbank ziehen und mit Kabeln verbinden. Es gibt Labornetzteil, Widerstand, LED, Schalter, Taster, Potentiometer, Kondensator, Multimeter und ein ESP32 DevKit.
+- **Schaltungen bauen:** Bauteile aus dem Baukasten auf die Werkbank ziehen und mit Kabeln verbinden. Es gibt Labornetzteil, Widerstand, LED, Schalter, Taster, Potentiometer, Kondensator, Transistor, Motor, Multimeter, Oszilloskop und ein ESP32 DevKit.
 - **Sehen, was passiert:** Die Schaltung wird laufend durchgerechnet. Spannung und Strom lassen sich am Netzteil einstellen und an jedem Bauteil messen, der Stromfluss ist in den Kabeln sichtbar.
 - **Fehler machen:** Zu viel Strom zerstört LEDs und Widerstände, ein offener Eingang am ESP32 liefert zufällige Werte, ein Kurzschluss schickt das Netzteil in die Strombegrenzung.
 - **Den ESP32 kennenlernen:** Drei Sketche (Blink, Taster einlesen, LED per Poti dimmen), bei denen sich Pins und Werte direkt im Code ändern lassen.
-- **Schritt für Schritt lernen:** Zehn Lektionen vom ersten Stromkreis über das ohmsche Gesetz bis zu ADC und PWM, mit Zielen, die live abgehakt werden. Danach wartet ein freies Labor ohne Aufgabe.
+- **Schritt für Schritt lernen:** Zwölf Lektionen vom ersten Stromkreis über das ohmsche Gesetz bis zu PWM am Oszilloskop und dem Transistor als Schalter, mit Zielen, die live abgehakt werden. Danach wartet ein freies Labor ohne Aufgabe.
 
 Die Oberfläche gibt es auf Deutsch und Englisch, umschaltbar oben rechts. Beim ersten Besuch richtet sie sich nach der Browsersprache.
 
