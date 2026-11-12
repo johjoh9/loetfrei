@@ -22,6 +22,8 @@ Lötfrei ersetzt dafür die Werkbank: Netzteil, Widerstände, LEDs und ein ESP32
 
 Die Oberfläche gibt es auf Deutsch und Englisch, umschaltbar oben rechts. Beim ersten Besuch richtet sie sich nach der Browsersprache.
 
+Lötfrei lässt sich wie eine App installieren (im Browser-Menü „Zum Startbildschirm hinzufügen“ oder „Installieren“) und läuft danach auch ohne Internetverbindung.
+
 Die App läuft auch auf dem Smartphone: Mit zwei Fingern zoomen, mit einem Finger die Werkbank verschieben, Kabel durch Antippen zweier Anschlüsse ziehen.
 
 ## Selbst hosten oder weiterentwickeln
@@ -33,6 +35,8 @@ index.html          Seitengerüst und Werkbank
 css/style.css       Gestaltung
 js/sim.js           Schaltungssimulation
 js/app.js           Bauteile, Bedienung, Ton, Sketche, Lektionen
+sw.js               Service Worker für den Offline-Betrieb
+manifest.webmanifest, icons/   Angaben und Symbole für die Installation
 test/sim.test.js    Rechenproben für die Simulation (node test/sim.test.js)
 ```
 

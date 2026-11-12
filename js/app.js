@@ -803,3 +803,6 @@ $('#zIn').addEventListener('click', () => zc(0.75)); $('#zOut').addEventListener
 applyLang(); fit(); new ResizeObserver(fit).observe(wrap);
 loadLevel(clamp(store.level | 0, 0, LEVELS.length - 1));
 requestAnimationFrame(frame);
+
+/* Offline-Betrieb und Installation als App */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});

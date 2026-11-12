@@ -1,0 +1,15 @@
+{
+  "name": "Lötfrei Elektronik-Labor",
+  "short_name": "Lötfrei",
+  "description": "Schaltungen im Browser bauen und Elektrotechnik sowie den ESP32 lernen. Build circuits in the browser and learn electronics and the ESP32.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e7eaec",
+  "theme_color": "#f5f6f7",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
