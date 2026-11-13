@@ -1,6 +1,6 @@
 /* Offline-Betrieb: online immer die aktuelle Version laden und merken, offline aus dem Speicher bedienen. */
-const CACHE = 'loetfrei-v1';
-const FILES = ['./', 'index.html', 'css/style.css', 'js/sim.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png'];
+const CACHE = 'loetfrei-v2-learning';
+const FILES = ['./', 'index.html', 'css/style.css', 'js/learning.js', 'js/sim.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

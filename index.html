@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lötfrei Elektronik-Labor</title>
 <meta name="description" content="Elektronik-Labor im Browser: Schaltungen bauen, Elektrotechnik und ESP32 lernen.">
-<meta name="theme-color" content="#f5f6f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#212b32" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fffdf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#192c30" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
@@ -52,8 +52,16 @@
   <aside>
     <section id="lesson">
       <div class="lhead"><h1 id="lTitle"></h1><button type="button" id="foldBtn" class="fold" aria-expanded="true" aria-controls="lBody" data-ia="aFold"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6"/></svg></button></div>
+      <div class="learning-actions">
+        <button type="button" class="btn primary" id="schematicBtn" aria-haspopup="dialog" aria-controls="schematicDialog">Schaltplan</button>
+      </div>
       <div id="lBody">
       <div id="lText"></div>
+      <details id="solution" class="learning-solution">
+        <summary id="solutionLabel">Lösungsweg anzeigen</summary>
+        <p class="muted" id="solutionNote"></p>
+        <ol id="solutionSteps"></ol>
+      </details>
       <div id="goalSec"><ul id="goals"></ul></div>
       <div id="hints"></div>
       <button type="button" class="btn" id="hintBtn">Tipp zeigen</button>
@@ -69,6 +77,13 @@
     </section>
   </aside>
 </main>
+<dialog id="schematicDialog" aria-labelledby="schematicTitle" aria-describedby="schematicNote">
+  <div class="dialog-head"><h2 id="schematicTitle"></h2><button type="button" class="btn" id="closeSchematic">Schließen</button></div>
+  <p id="schematicNote" class="muted"></p>
+  <div id="schematicImage" tabindex="0"></div>
+  <p id="schematicLegend" class="muted"></p>
+</dialog>
+<script src="js/learning.js"></script>
 <script src="js/sim.js"></script>
 <script src="js/app.js"></script>
 </body>
