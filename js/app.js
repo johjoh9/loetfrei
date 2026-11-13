@@ -451,7 +451,7 @@ svg.addEventListener('wheel', e => {
 svg.addEventListener('dblclick', e => { const wg = e.target.closest('[data-wire]'); if (wg) { select({ w: S.wires.find(w => w.id == wg.dataset.wire) }); delSel(); } });
 svg.addEventListener('contextmenu', e => { e.preventDefault(); const g = e.target.closest('[data-wire],[data-comp]'); if (!g) return; select(g.dataset.wire ? { w: S.wires.find(w => w.id == g.dataset.wire) } : { c: comp(+g.dataset.comp) }); delSel(); });
 document.addEventListener('keydown', e => {
-  if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if ($('#schematicDialog').open || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); delSel(); }
   else if (e.key === 'r' || e.key === 'R') rotSel();
   else if (e.key === 'Escape') { endWiring(); select(null); }
@@ -754,6 +754,8 @@ const LEVELS = [
 ];
 
 function loadLevel(i, keepDone) {
+  $('#schematicDialog').close();
+  $('#solution').open = false;
   levelIdx = i; level = LEVELS[i]; store.level = i; save();
   nextId = 1; S.comps = level.build(); S.wires = []; S.topo = true; S.t = 0; undo = []; mem = {}; doneHold = 0; completed = false; hintN = 0; wcI = 0;
   (level.wires || []).forEach(w => addWire([w[0] + 1, w[1]], [w[2] + 1, w[3]], true));   // vorverdrahtete Aufbauten: [Bauteil, Anschluss, Bauteil, Anschluss]
@@ -771,12 +773,31 @@ function renderNav() {
 $('#nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { audio(); snd('toggle'); loadLevel(+b.dataset.i); } });
 const chipTxt = n => L(`${n} von ${level.goals.length} Zielen`, `${n} of ${level.goals.length} goals`);
 function renderLesson() {
+  renderLearning();
   $('#lTitle').textContent = tr(level.title); $('#lText').innerHTML = tr(level.text);
   $('#goals').innerHTML = level.goals.map((g, i) => `<li id="g${i}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg><span>${tr(g[0])}</span></li>`).join('');
   $('#goalSec').hidden = !level.goals.length; $('#hints').innerHTML = ''; $('#hintBtn').hidden = !level.hints.length; $('#hintBtn').textContent = L('Tipp zeigen', 'Show a hint');
   $('#win').hidden = true;
   const ch = $('#goalChip'); ch.hidden = !level.goals.length; ch.textContent = chipTxt(0); ch.classList.remove('ok');
 }
+function renderLearning() {
+  const available = Learning.has(level.id), content = Learning.render(level.id, LANG);
+  $('#schematicBtn').hidden = !available;
+  $('#solution').hidden = !available;
+  $('#schematicBtn').textContent = L('Schaltplan', 'Schematic');
+  $('#solutionLabel').textContent = L('Lösungsweg · Schritt für Schritt', 'Solution · step by step');
+  $('#solutionNote').textContent = L('Beispiel mit den unten genannten Werten, keine Live-Messung. LED-Spannungen sind Näherungen.', 'Example using the values below, not a live measurement. LED voltages are approximate.');
+  $('#solutionSteps').innerHTML = content.steps;
+  $('#schematicTitle').textContent = L('Schaltplan: ', 'Schematic: ') + tr(level.title);
+  $('#schematicNote').textContent = L('Referenz für diese Lektion. Zeigt eine mögliche Lösung, nicht deinen aktuellen Aufbau. ESP32-Pins entsprechen dem Standard-Sketch.', 'Reference for this lesson. Shows one possible solution, not your current wiring. ESP32 pins match the default sketch.');
+  $('#schematicImage').innerHTML = content.svg;
+  $('#schematicImage').setAttribute('aria-label', L('Schaltplan, bei Bedarf seitlich scrollen', 'Schematic, scroll sideways if needed'));
+  $('#schematicLegend').textContent = L('Auf kleinen Bildschirmen seitlich scrollen. Linien = Kabel · Punkte = verbundene Abzweige · LED: + links, − rechts. Messgerät A in Reihe, V parallel anschließen.', 'On small screens, scroll sideways. Lines = wires · dots = connected junctions · LED: + left, − right. Connect an ammeter (A) in series, a voltmeter (V) in parallel.');
+  $('#closeSchematic').textContent = L('Schließen', 'Close');
+}
+$('#schematicBtn').addEventListener('click', () => $('#schematicDialog').showModal());
+$('#closeSchematic').addEventListener('click', () => $('#schematicDialog').close());
+
 function setFold(f) { store.fold = !!f; save(); $('#lesson').classList.toggle('folded', store.fold); $('#foldBtn').setAttribute('aria-expanded', !store.fold); }
 function showWin() {
   if (store.fold) setFold(false);

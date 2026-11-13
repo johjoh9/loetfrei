@@ -18,6 +18,7 @@ Lötfrei ersetzt dafür die Werkbank: Netzteil, Widerstände, LEDs und ein ESP32
 - **Sehen, was passiert:** Die Schaltung wird laufend durchgerechnet. Spannung und Strom lassen sich am Netzteil einstellen und an jedem Bauteil messen, der Stromfluss ist in den Kabeln sichtbar.
 - **Fehler machen:** Zu viel Strom zerstört LEDs und Widerstände, ein offener Eingang am ESP32 liefert zufällige Werte, ein Kurzschluss schickt das Netzteil in die Strombegrenzung.
 - **Den ESP32 kennenlernen:** Drei Sketche (Blink, Taster einlesen, LED per Poti dimmen), bei denen sich Pins und Werte direkt im Code ändern lassen.
+- **Schaltplan und Rechenhilfe:** Jede der zwölf Lektionen hat einen Referenzschaltplan und einen zunächst geschlossenen Lösungsweg mit Formel, eingesetzten Werten, Einheiten und Kontrolle. Die Beispiele sind auf Deutsch und Englisch verfügbar; sie zeigen keine Live-Messung des eigenen Aufbaus.
 - **Schritt für Schritt lernen:** Zwölf Lektionen vom ersten Stromkreis über das ohmsche Gesetz bis zu PWM am Oszilloskop und dem Transistor als Schalter, mit Zielen, die live abgehakt werden. Danach wartet ein freies Labor ohne Aufgabe.
 
 Die Oberfläche gibt es auf Deutsch und Englisch, umschaltbar oben rechts. Beim ersten Besuch richtet sie sich nach der Browsersprache.
@@ -33,11 +34,13 @@ Lötfrei besteht nur aus HTML, CSS und JavaScript, ohne Build-Schritt, ohne Abh�
 ```
 index.html          Seitengerüst und Werkbank
 css/style.css       Gestaltung
+js/learning.js      Referenzschaltpläne und Rechenwege (DE/EN)
 js/sim.js           Schaltungssimulation
 js/app.js           Bauteile, Bedienung, Ton, Sketche, Lektionen
 sw.js               Service Worker für den Offline-Betrieb
 manifest.webmanifest, icons/   Angaben und Symbole für die Installation
 test/sim.test.js    Rechenproben für die Simulation (node test/sim.test.js)
+test/learning.test.js  Lerninhalte und Beispielwerte prüfen (node test/learning.test.js)
 ```
 
 Neue Lektionen stehen im Array `LEVELS` in `js/app.js`. Ideen, Fehlerberichte und Pull Requests sind willkommen.
